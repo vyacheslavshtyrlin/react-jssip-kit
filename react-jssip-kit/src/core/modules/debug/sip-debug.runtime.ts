@@ -1,6 +1,10 @@
 import type { SipState } from "../../contracts/state";
-
-const SESSION_DEBUG_KEY = "sip-debug-enabled";
+import {
+  parsePersistedDebug,
+  serializeDebugSetting,
+  SIP_DEBUG_STORAGE_KEY,
+  type SipDebugSetting,
+} from "./sip-debug.storage";
 
 type DebugRuntimeDeps = {
   getState: () => SipState;
@@ -23,14 +27,30 @@ export class SipDebugRuntime {
       setDebug(debug ?? true);
   }
 
-  getPersistedDebug(): boolean | string | undefined {
+  getPersistedDebug(): SipDebugSetting {
     if (typeof window === "undefined") return undefined;
     try {
-      const persisted = window.sessionStorage.getItem(SESSION_DEBUG_KEY);
-      if (!persisted) return undefined;
-      return persisted;
+      return parsePersistedDebug(
+        window.sessionStorage.getItem(SIP_DEBUG_STORAGE_KEY)
+      );
     } catch {
       return undefined;
+    }
+  }
+
+  persistDebugOverride(debug?: boolean | string): void {
+    if (typeof window === "undefined") return;
+    try {
+      if (debug === undefined) {
+        window.sessionStorage.removeItem(SIP_DEBUG_STORAGE_KEY);
+        return;
+      }
+      window.sessionStorage.setItem(
+        SIP_DEBUG_STORAGE_KEY,
+        serializeDebugSetting(debug)
+      );
+    } catch {
+      /* ignore */
     }
   }
 

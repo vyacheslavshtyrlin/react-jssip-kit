@@ -48,6 +48,8 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
 
   private readonly uaModule: UaModule;
   private debugPattern?: boolean | string;
+  private runtimeDebugOverride?: boolean | string;
+  private configDebug?: boolean | string;
   private maxSessionCount = Infinity;
   private iceCandidateReadyDelayMs?: number;
   private sessionManager = new SessionManager();
@@ -133,6 +135,7 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
       ...uaCfg
     } = config;
     this.lastConnectParams = { uri, password, config };
+    this.configDebug = cfgDebug;
     this.reconnectConfig = reconnect?.enabled ? reconnect : null;
     this.maxSessionCount =
       typeof maxSessionCount === "number" ? maxSessionCount : Infinity;
@@ -145,8 +148,7 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
       intervalMs: micRecoveryIntervalMs,
       maxRetries: micRecoveryMaxRetries,
     });
-    const debug =
-      cfgDebug ?? this.debugRuntime.getPersistedDebug() ?? this.debugPattern;
+    const debug = this.resolveDebug(cfgDebug);
     this.uaModule.start(uri, password, uaCfg, debug);
     this.sessionModule.setDebugEnabled(Boolean(debug));
     this.unloadRuntime.attach(() => {
@@ -218,9 +220,9 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
     }
     const { uri, password, config } = this.lastConnectParams;
     const { debug: cfgDebug, ...uaCfg } = config;
+    this.configDebug = cfgDebug;
     this.stateStore.setState({ sipStatus: SipStatus.Connecting });
-    const debug =
-      cfgDebug ?? this.debugRuntime.getPersistedDebug() ?? this.debugPattern;
+    const debug = this.resolveDebug(cfgDebug);
     this.uaModule.start(uri, password, uaCfg, debug);
     this.unloadRuntime.attach(() => {
       this.hangupAll();
@@ -301,12 +303,23 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
   }
 
   public setDebug(debug?: boolean | string) {
-    this.debugPattern = debug;
-    this.uaModule.setDebug(debug);
-    this.sessionModule.setDebugEnabled(Boolean(debug));
-    const effectiveDebug =
-      debug ?? this.debugRuntime.getPersistedDebug() ?? this.debugPattern;
+    this.runtimeDebugOverride = debug;
+    this.debugRuntime.persistDebugOverride(debug);
+    const effectiveDebug = this.resolveDebug();
+    this.uaModule.setDebug(effectiveDebug);
+    this.sessionModule.setDebugEnabled(Boolean(effectiveDebug));
     this.debugRuntime.syncInspector(effectiveDebug);
+  }
+
+  private resolveDebug(
+    configDebug: boolean | string | undefined = this.configDebug
+  ): boolean | string | undefined {
+    return (
+      this.runtimeDebugOverride ??
+      this.debugRuntime.getPersistedDebug() ??
+      configDebug ??
+      this.debugPattern
+    );
   }
 
   private cleanupAllSessions() {

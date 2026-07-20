@@ -1,4 +1,10 @@
 import JsSIP from "jssip";
+import {
+  parsePersistedDebug,
+  serializeDebugSetting,
+  SIP_DEBUG_DEFAULT_PATTERN,
+  SIP_DEBUG_STORAGE_KEY,
+} from "./sip-debug.storage";
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -12,15 +18,34 @@ export class SipDebugger {
   private readonly defaultPattern: string;
   private enabled = false;
 
-  constructor(storageKey = "sip-debug-enabled", defaultPattern = "JsSIP:*") {
+  constructor(
+    storageKey = SIP_DEBUG_STORAGE_KEY,
+    defaultPattern = SIP_DEBUG_DEFAULT_PATTERN
+  ) {
     this.storageKey = storageKey;
     this.defaultPattern = defaultPattern;
   }
 
   initFromSession(storage: StorageLike | null = safeSessionStorage()): void {
     try {
-      const saved = storage?.getItem(this.storageKey);
-      if (saved) this.enable(saved, storage);
+      const saved = parsePersistedDebug(
+        storage?.getItem(this.storageKey) ?? null
+      );
+      if (saved === false) {
+        if (typeof JsSIP?.debug?.disable === "function") {
+          JsSIP.debug.disable();
+        } else if (typeof JsSIP?.debug?.enable === "function") {
+          JsSIP.debug.enable("");
+        }
+        this.enabled = false;
+        return;
+      }
+      if (saved) {
+        this.enable(
+          typeof saved === "string" ? saved : this.defaultPattern,
+          storage
+        );
+      }
     } catch {
       /* ignore */
     }
@@ -31,12 +56,16 @@ export class SipDebugger {
     storage: StorageLike | null = safeSessionStorage()
   ): void {
     try {
+      const effectivePattern = pattern.trim() ? pattern : this.defaultPattern;
       if (typeof JsSIP?.debug?.enable === "function") {
-        JsSIP.debug.enable(pattern);
+        JsSIP.debug.enable(effectivePattern);
       }
-      storage?.setItem?.(this.storageKey, pattern || this.defaultPattern);
+      storage?.setItem?.(
+        this.storageKey,
+        serializeDebugSetting(effectivePattern)
+      );
       try {
-        (window as any).sipDebugBridge?.(pattern);
+        (window as any).sipDebugBridge?.(effectivePattern);
       } catch {
         /* ignore */
       }
@@ -53,7 +82,7 @@ export class SipDebugger {
       } else if (typeof JsSIP?.debug?.enable === "function") {
         JsSIP.debug.enable("");
       }
-      storage?.removeItem?.(this.storageKey);
+      storage?.setItem?.(this.storageKey, serializeDebugSetting(false));
       try {
         (window as any).sipDebugBridge?.(false);
       } catch {

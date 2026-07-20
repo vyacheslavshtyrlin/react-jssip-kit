@@ -1,6 +1,12 @@
 import type { UA } from "jssip";
 import JsSIP from "jssip";
 import type { SipConfiguration, UAConfiguration } from "./types";
+import {
+  parsePersistedDebug,
+  SIP_DEBUG_DEFAULT_PATTERN,
+  SIP_DEBUG_STORAGE_KEY,
+  type SipDebugSetting,
+} from "../modules/debug/sip-debug.storage";
 
 type StartOpts = { debug?: boolean | string };
 
@@ -82,17 +88,16 @@ export class SipUserAgent {
   protected applyDebug(debug?: boolean | string): void {
     const stored = debug === undefined ? this.readSessionFlag() : debug;
     const enabled = !!stored;
-    const pattern = typeof stored === "string" ? stored : "JsSIP:*";
+    const pattern =
+      typeof stored === "string" ? stored : SIP_DEBUG_DEFAULT_PATTERN;
 
     if (enabled) {
       JsSIP.debug.enable(pattern);
       const dbg: any = (JsSIP as any).debug;
       if (dbg?.setLogger) dbg.setLogger(console);
       else if (dbg) dbg.logger = console;
-      this.persistSessionFlag(typeof stored === "string" ? stored : undefined);
     } else {
       (JsSIP.debug as any)?.disable?.();
-      this.clearSessionFlag();
     }
   }
 
@@ -100,37 +105,14 @@ export class SipUserAgent {
     return new JsSIP.UA(cfg);
   }
 
-  private readSessionFlag(): string | false {
+  private readSessionFlag(): SipDebugSetting {
     try {
-      if (typeof window === "undefined") return false;
-      const value = window.sessionStorage.getItem("sip-debug-enabled");
-      if (!value) return false;
-      return value;
+      if (typeof window === "undefined") return undefined;
+      return parsePersistedDebug(
+        window.sessionStorage.getItem(SIP_DEBUG_STORAGE_KEY)
+      );
     } catch {
-      return false;
-    }
-  }
-
-  private persistSessionFlag(pattern?: string): void {
-    try {
-      if (typeof window !== "undefined") {
-        window.sessionStorage.setItem(
-          "sip-debug-enabled",
-          pattern || "JsSIP:*"
-        );
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  private clearSessionFlag(): void {
-    try {
-      if (typeof window !== "undefined") {
-        window.sessionStorage.removeItem("sip-debug-enabled");
-      }
-    } catch {
-      /* ignore */
+      return undefined;
     }
   }
 }
