@@ -1,4 +1,4 @@
-# Victory Sip
+# react-jssip-kit
 
 Monorepo for `react-jssip-kit`: a React provider and hook library for JsSIP
 SIP/WebRTC calling UI, plus a Vite demo app used for local development.
