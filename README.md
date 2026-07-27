@@ -1,45 +1,40 @@
-# react-jssip
+# Victory Sip
 
-A React connection for [JsSIP](https://jssip.net/):  
-**Provider and hooks for easy SIP/WebRTC integration in React apps.**
+Monorepo for `react-jssip-kit`: a React provider and hook library for JsSIP
+SIP/WebRTC calling UI, plus a Vite demo app used for local development.
 
+## Packages
 
-## ⚡️ Quick Commands
+| Workspace                              | Purpose                                                                     |
+| -------------------------------------- | --------------------------------------------------------------------------- |
+| [`react-jssip-kit`](./react-jssip-kit) | Publishable npm package with hooks, provider, typed state, and SIP actions. |
+| [`demo`](./demo)                       | Local Vite app for testing real calling flows and UI integration.           |
 
-From the **root directory**, use these commands:
+## Documentation
 
-| Command             | Description                         |
-|---------------------|-------------------------------------|
-| `npm install`       | Install all dependencies            |
-| `npm run build:react-jssip` | Build the `react-jssip` library     |
-| `npm run dev:demo`  | Start the demo app (Vite dev mode)  |
-| `npm run build:demo`| Build the demo app for production   |
-| `npm run build`     | Build both the library and demo app |
+- [npm README](./react-jssip-kit/README.md)
+- [Getting Started](./react-jssip-kit/docs/GETTING_STARTED.md)
+- [API Reference](./react-jssip-kit/docs/API.md)
+- [JsSIP Interop](./react-jssip-kit/docs/JSSIP_INTEROP.md)
+- [Recipes](./react-jssip-kit/docs/RECIPES.md)
+- [Modules and Lifecycle](./react-jssip-kit/docs/MODULES.md)
+- [Changelog](./react-jssip-kit/CHANGELOG.md)
 
+## Commands
 
-## 📦 Packages
+Run commands from the repository root.
 
-| Folder         | Description                          |
-| -------------- | ------------------------------------ |
-| `react-jssip/` | jssip-react         |
-| `demo/`        | Vite app demo for development/testing|
+| Command                         | Description                          |
+| ------------------------------- | ------------------------------------ |
+| `npm install`                   | Install all workspace dependencies.  |
+| `npm run build:react-jssip-kit` | Build the npm package.               |
+| `npm run dev:demo`              | Start the demo app in Vite dev mode. |
+| `npm run build:demo`            | Build the demo app.                  |
+| `npm run build`                 | Build the package and demo app.      |
 
----
+## Publishing Checklist
 
-## 🚀 Features
-
-- Context provider for JsSIP UserAgent and events
-- Hooks to access SIP state, RTCSession, SIP Client, call actions
-
----
-
-
-
-## 🚀 Getting Started
-
-### 1. Clone and Install
-
-```bash
-git clone 
-cd your-repo
-npm install
+1. Update `react-jssip-kit/CHANGELOG.md`.
+2. Verify `react-jssip-kit/README.md` renders cleanly on npm.
+3. Run `npm run build:react-jssip-kit`.
+4. Publish from `react-jssip-kit`.

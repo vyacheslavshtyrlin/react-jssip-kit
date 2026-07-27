@@ -8,7 +8,7 @@ export { useSipState } from "./hooks/useSipState";
 export { useSipActions } from "./hooks/useSipActions";
 export { useSipKernel } from "./hooks/useSip";
 export { useSipSelector } from "./hooks/useSipSelector";
-export { useSipSession } from "./hooks/useSipSession";
+export { useActiveSipSession, useSipSession } from "./hooks/useSipSession";
 export { useSipSessions } from "./hooks/useSipSessions";
 export { useSipEvent, useSipSessionEvent } from "./hooks/useSipEvent";
 export { useMicDrop } from "./hooks/useMicDrop";
