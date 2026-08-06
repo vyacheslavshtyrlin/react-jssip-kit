@@ -22,7 +22,7 @@ export class WebRTCSessionController {
     return (this.currentSession as any)?.connection ?? null;
   }
 
-  public cleanup(stopTracks: boolean = true): void {
+  public cleanup(stopTracks: boolean = false): void {
     const pc = this.getPC();
     const isClosed =
       pc?.connectionState === "closed" || pc?.signalingState === "closed";
@@ -31,7 +31,7 @@ export class WebRTCSessionController {
       if (!isClosed) {
         for (const sender of pc.getSenders()) {
           try {
-            sender.replaceTrack(null);
+            void sender.replaceTrack(null).catch(() => {});
           } catch {
             // ignore if sender/pc already closed
           }
@@ -40,17 +40,7 @@ export class WebRTCSessionController {
     }
 
     if (stopTracks && this.mediaStream) {
-      const senderTracks =
-        pc && !isClosed
-          ? new Set(
-              pc
-                .getSenders()
-                .map((sender) => sender.track)
-                .filter((track): track is MediaStreamTrack => Boolean(track))
-            )
-          : null;
       for (const track of this.mediaStream.getTracks()) {
-        if (senderTracks?.has(track)) continue;
         track.stop();
       }
     }

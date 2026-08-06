@@ -18,10 +18,9 @@ export function useSessionMedia(sessionId?: string): SessionMediaState {
     return active?.id ?? sessions[0]?.id;
   }, [sessionId, sessions]);
 
-  const session = useMemo(
-    () => (resolvedSessionId ? media.getSession(resolvedSessionId) : null),
-    [media, resolvedSessionId]
-  );
+  const session = resolvedSessionId
+    ? media.getSession(resolvedSessionId)
+    : null;
   const sessionState = useMemo(() => {
     if (!resolvedSessionId) return null;
     return sessions.find((s) => s.id === resolvedSessionId) ?? null;
@@ -56,6 +55,7 @@ export function useSessionMedia(sessionId?: string): SessionMediaState {
     }
 
     const off = media.observePeerConnection(resolvedSessionId, (pc) => {
+      trackIdsRef.current = "";
       setPeerConnection(pc);
       updateRemoteStream(pc);
     });
@@ -90,14 +90,26 @@ export function useSessionMedia(sessionId?: string): SessionMediaState {
     };
 
     peerConnection.addEventListener("track", update);
-    peerConnection.addEventListener("connectionstatechange", onConnectionStateChange);
-    peerConnection.addEventListener("iceconnectionstatechange", onIceStateChange);
+    peerConnection.addEventListener(
+      "connectionstatechange",
+      onConnectionStateChange
+    );
+    peerConnection.addEventListener(
+      "iceconnectionstatechange",
+      onIceStateChange
+    );
     update();
 
     return () => {
       peerConnection.removeEventListener("track", update);
-      peerConnection.removeEventListener("connectionstatechange", onConnectionStateChange);
-      peerConnection.removeEventListener("iceconnectionstatechange", onIceStateChange);
+      peerConnection.removeEventListener(
+        "connectionstatechange",
+        onConnectionStateChange
+      );
+      peerConnection.removeEventListener(
+        "iceconnectionstatechange",
+        onIceStateChange
+      );
     };
   }, [peerConnection, updateRemoteStream]);
 

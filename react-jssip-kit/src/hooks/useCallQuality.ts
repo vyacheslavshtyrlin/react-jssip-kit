@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CallStatus } from "../core/contracts/state";
 import { useSipKernel } from "./useSip";
 import { useSipSelector } from "./useSipSelector";
@@ -44,10 +44,7 @@ async function readStats(
       packetsLost = (stat as any).packetsLost ?? 0;
     }
 
-    if (
-      stat.type === "candidate-pair" &&
-      (stat as any).state === "succeeded"
-    ) {
+    if (stat.type === "candidate-pair" && (stat as any).state === "succeeded") {
       const raw = (stat as any).currentRoundTripTime;
       if (typeof raw === "number") rtt = raw * 1000;
     }
@@ -75,9 +72,6 @@ export function useCallQuality(sessionId?: string): CallQuality | null {
   const { media } = useSipKernel();
   const sessions = useSipSelector((s) => s.sessions);
   const [quality, setQuality] = useState<CallQuality | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const prevReceived = useRef(0);
-  const prevLost = useRef(0);
 
   const resolvedSessionId = useMemo(() => {
     if (sessionId) return sessionId;
@@ -87,37 +81,69 @@ export function useCallQuality(sessionId?: string): CallQuality | null {
 
   useEffect(() => {
     if (!resolvedSessionId) {
-      pcRef.current = null;
       setQuality(null);
       return;
     }
-    return media.observePeerConnection(resolvedSessionId, (pc) => {
-      pcRef.current = pc;
-      if (!pc) setQuality(null);
-    });
-  }, [media, resolvedSessionId]);
 
-  useEffect(() => {
-    if (!resolvedSessionId) return;
-
-    prevReceived.current = 0;
-    prevLost.current = 0;
-
+    let disposed = false;
+    let peerConnection: RTCPeerConnection | null = null;
+    let generation = 0;
+    let counters = {
+      received: { current: 0 },
+      lost: { current: 0 },
+    };
+    const inFlight = new Set<RTCPeerConnection>();
     const poll = async () => {
-      const pc = pcRef.current;
+      const pc = peerConnection;
       if (!pc) return;
+      if (inFlight.has(pc)) return;
+
+      const pollGeneration = generation;
+      const pollCounters = counters;
+      inFlight.add(pc);
       try {
-        const result = await readStats(pc, prevReceived, prevLost);
-        if (result) setQuality(result);
+        const result = await readStats(
+          pc,
+          pollCounters.received,
+          pollCounters.lost
+        );
+        if (
+          result &&
+          !disposed &&
+          pollGeneration === generation &&
+          pc === peerConnection
+        ) {
+          setQuality(result);
+        }
       } catch {
         // ignore stats errors
+      } finally {
+        inFlight.delete(pc);
       }
     };
 
-    void poll();
+    const unsubscribe = media.observePeerConnection(
+      resolvedSessionId,
+      (nextPeerConnection) => {
+        peerConnection = nextPeerConnection;
+        generation += 1;
+        counters = {
+          received: { current: 0 },
+          lost: { current: 0 },
+        };
+        setQuality(null);
+        void poll();
+      }
+    );
     const timer = setInterval(() => void poll(), POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [resolvedSessionId]);
+
+    return () => {
+      disposed = true;
+      generation += 1;
+      clearInterval(timer);
+      unsubscribe();
+    };
+  }, [media, resolvedSessionId]);
 
   return quality;
 }

@@ -52,7 +52,6 @@ export interface StateAdapter {
   subscribe(fn: (state: SipState) => void): Unsubscribe;
   subscribeInternal(fn: (state: InternalSipState) => void): Unsubscribe;
   setState(partial: Partial<InternalSipState>): void;
-  batchSet(partial: Partial<InternalSipState>): void;
   reset(overrides?: Partial<InternalSipState>): void;
 }
 

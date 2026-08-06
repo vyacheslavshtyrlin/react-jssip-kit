@@ -1,13 +1,9 @@
 ﻿import type { RTCSessionEventMap } from "../../sip/types";
 import { CallStatus } from "../../contracts/state";
 import type { StateAdapter } from "../../contracts/state";
-import type { WebRTCSessionController } from "../media/webrtc-session.controller";
 import type { JsSIPEventMap } from "../../sip/types";
 import type { JssipEventEmitter } from "../event/event-target.emitter";
-import {
-  removeSessionState,
-  upsertSessionState,
-} from "./session.state.projector";
+import { upsertSessionState } from "./session.state.projector";
 import { sipDebugLogger } from "../debug/sip-debug.logger";
 
 import type {
@@ -25,8 +21,7 @@ import type {
 type Deps = {
   emitter: JssipEventEmitter<JsSIPEventMap>;
   state: StateAdapter;
-  rtc: WebRTCSessionController;
-  detachSessionHandlers: () => void;
+  cleanupSession: () => void;
   enableMicrophoneRecovery?: (sessionId: string) => void;
   holdOtherActiveSessions?: () => void;
   iceCandidateReadyDelayMs?: number;
@@ -37,8 +32,7 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
   const {
     emitter,
     state,
-    rtc,
-    detachSessionHandlers,
+    cleanupSession,
     sessionId,
     iceCandidateReadyDelayMs,
     holdOtherActiveSessions,
@@ -58,13 +52,11 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
     removeIceFailedListener?.();
     removeIceFailedListener = null;
   };
-  const cleanupSession = () => {
+  const finishSession = () => {
     sessionEnded = true;
     clearIceReadyTimer();
     cleanupIceFailedListener();
-    detachSessionHandlers();
-    rtc.cleanup();
-    removeSessionState(state, sessionId);
+    cleanupSession();
   };
   const setPeerConnectionError = (eventName: string, error: unknown) => {
     const message =
@@ -82,10 +74,7 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
   return {
     progress: (e: IncomingEvent | OutgoingEvent) => {
       emitter.emit("progress", e);
-      if (
-        (e as any).originator === "remote" &&
-        (e as any).response?.body
-      ) {
+      if ((e as any).originator === "remote" && (e as any).response?.body) {
         upsertSessionState(state, sessionId, {
           status: CallStatus.EarlyMedia,
         });
@@ -107,11 +96,11 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
 
     ended: (e) => {
       emitter.emit("ended", e);
-      cleanupSession();
+      finishSession();
     },
     failed: (e) => {
       emitter.emit("failed", e);
-      cleanupSession();
+      finishSession();
     },
 
     muted: (e) => {
@@ -193,19 +182,19 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
 
     getusermediafailed: (e) => {
       emitter.emit("getusermediafailed", e);
-      cleanupSession();
+      finishSession();
     },
     "peerconnection:createofferfailed": (e) => {
       emitter.emit("peerconnection:createofferfailed", e);
-      cleanupSession();
+      finishSession();
     },
     "peerconnection:createanswerfailed": (e) => {
       emitter.emit("peerconnection:createanswerfailed", e);
-      cleanupSession();
+      finishSession();
     },
     "peerconnection:setlocaldescriptionfailed": (e) => {
       emitter.emit("peerconnection:setlocaldescriptionfailed", e);
-      cleanupSession();
+      finishSession();
     },
     "peerconnection:setremotedescriptionfailed": (e) => {
       emitter.emit("peerconnection:setremotedescriptionfailed", e);

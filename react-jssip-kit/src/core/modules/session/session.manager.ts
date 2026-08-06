@@ -11,19 +11,29 @@ type SessionEntry = {
   rtc: WebRTCSessionController;
   session?: RTCSession | null;
   media?: MediaStream | null;
+  ownsMediaTracks: boolean;
+};
+
+type PendingMedia = {
+  stream: MediaStream;
+  ownsTracks: boolean;
 };
 
 export class SessionManager {
   private entries = new Map<string, SessionEntry>();
-  private pendingMedia: MediaStream | null = null;
+  private pendingMedia: PendingMedia | null = null;
 
   /**
    * Set media that will be consumed by the NEXT getOrCreateRtc call.
    * Must be called before ua.call() because JsSIP emits newRTCSession
    * synchronously inside ua.call(), before it returns the session reference.
    */
-  setPendingMedia(stream: MediaStream | null) {
-    this.pendingMedia = stream;
+  setPendingMedia(stream: MediaStream | null, ownsTracks = false) {
+    const previous = this.pendingMedia;
+    if (previous?.ownsTracks && previous.stream !== stream) {
+      this.stopMediaStream(previous.stream);
+    }
+    this.pendingMedia = stream ? { stream, ownsTracks } : null;
   }
 
   private stopMediaStream(stream?: MediaStream | null) {
@@ -39,12 +49,13 @@ export class SessionManager {
       // Consume pendingMedia set before ua.call() — it must be applied here
       // because JsSIP fires newRTCSession synchronously inside ua.call(),
       // before ua.call() returns and the caller can set media externally.
-      const media = this.pendingMedia;
+      const pendingMedia = this.pendingMedia;
       this.pendingMedia = null;
       entry = {
         rtc: new WebRTCSessionController(),
         session: null,
-        media,
+        media: pendingMedia?.stream ?? null,
+        ownsMediaTracks: pendingMedia?.ownsTracks ?? false,
       };
       this.entries.set(sessionId, entry);
     }
@@ -70,20 +81,23 @@ export class SessionManager {
         rtc: new WebRTCSessionController(),
         session,
         media: null,
+        ownsMediaTracks: false,
       });
     }
   }
 
-  setSessionMedia(sessionId: string, stream: MediaStream) {
+  setSessionMedia(sessionId: string, stream: MediaStream, ownsTracks = false) {
     const entry = this.entries.get(sessionId) ?? {
       rtc: new WebRTCSessionController(),
       session: null,
       media: null,
+      ownsMediaTracks: false,
     };
-    if (entry.media && entry.media !== stream) {
+    if (entry.ownsMediaTracks && entry.media && entry.media !== stream) {
       this.stopMediaStream(entry.media);
     }
     entry.media = stream;
+    entry.ownsMediaTracks = ownsTracks;
     entry.rtc.setMediaStream(stream);
     this.entries.set(sessionId, entry);
   }
@@ -106,18 +120,20 @@ export class SessionManager {
   cleanupSession(sessionId: string) {
     const entry = this.entries.get(sessionId);
     if (entry) {
-      entry.rtc.cleanup();
-      this.stopMediaStream(entry.media);
+      entry.rtc.cleanup(entry.ownsMediaTracks);
       this.entries.delete(sessionId);
     }
   }
 
   cleanupAllSessions() {
     for (const [, entry] of this.entries.entries()) {
-      entry.rtc.cleanup();
-      this.stopMediaStream(entry.media);
+      entry.rtc.cleanup(entry.ownsMediaTracks);
     }
     this.entries.clear();
+    if (this.pendingMedia?.ownsTracks) {
+      this.stopMediaStream(this.pendingMedia.stream);
+    }
+    this.pendingMedia = null;
   }
 
   answer(sessionId: string, options: AnswerOptions) {

@@ -29,7 +29,7 @@ export type AudioBindOpts = {
  *  - one extra attempt after exhaustion when a new PC event fires
  *  - proper cleanup via named function references so session.off works
  */
-export function createAudioBindRetry(opts: AudioBindOpts): void {
+export function createAudioBindRetry(opts: AudioBindOpts): () => void {
   const { session, tryBind, onStop, onExhausted, onConfirmedMiss } = opts;
   const maxAttempts = opts.maxAttempts ?? 50;
   const retryDelayMs = opts.retryDelayMs ?? 500;
@@ -41,6 +41,9 @@ export function createAudioBindRetry(opts: AudioBindOpts): void {
   let exhausted = false;
   let exhaustedCheckUsed = false;
   let attachedPc: RTCPeerConnection | null = null;
+  const attachedSessionEvents = new Set<
+    "peerconnection" | "confirmed" | "ended" | "failed"
+  >();
 
   const clearRetryTimer = () => {
     if (!retryTimer) return;
@@ -63,10 +66,23 @@ export function createAudioBindRetry(opts: AudioBindOpts): void {
       detachPcListeners(attachedPc);
       attachedPc = null;
     }
-    session.off?.("peerconnection", onPeer);
-    session.off?.("confirmed", onConfirmed);
-    session.off?.("ended", onEnded);
-    session.off?.("failed", onFailed);
+    const sessionHandlers = {
+      peerconnection: onPeer,
+      confirmed: onConfirmed,
+      ended: onEnded,
+      failed: onFailed,
+    } as const;
+    attachedSessionEvents.forEach((event) => {
+      try {
+        session.off?.(event, sessionHandlers[event]);
+      } catch (error) {
+        console.error(
+          "[react-jssip-kit] audio bind listener detach failed",
+          error
+        );
+      }
+    });
+    attachedSessionEvents.clear();
     onStop?.(bound);
   };
 
@@ -151,19 +167,41 @@ export function createAudioBindRetry(opts: AudioBindOpts): void {
   // Attempt with any already-available connection.
   // If it succeeds we still register confirmed/ended/failed for lifecycle cleanup.
   // If it fails we also register the peerconnection listener and start retrying.
+  const attachSessionListener = <
+    K extends "peerconnection" | "confirmed" | "ended" | "failed",
+  >(
+    event: K,
+    handler: {
+      peerconnection: typeof onPeer;
+      confirmed: typeof onConfirmed;
+      ended: typeof onEnded;
+      failed: typeof onFailed;
+    }[K]
+  ) => {
+    attachedSessionEvents.add(event);
+    session.on?.(event, handler);
+  };
+
   const existingPc =
     (session as RTCSession & { connection?: RTCPeerConnection })?.connection ??
     null;
 
-  if (!tryBind(existingPc)) {
-    if (existingPc) {
-      attachPcListeners(existingPc);
-      scheduleRetry(existingPc);
+  try {
+    if (!tryBind(existingPc)) {
+      if (existingPc) {
+        attachPcListeners(existingPc);
+        scheduleRetry(existingPc);
+      }
+      attachSessionListener("peerconnection", onPeer);
     }
-    session.on?.("peerconnection", onPeer);
+
+    attachSessionListener("confirmed", onConfirmed);
+    attachSessionListener("ended", onEnded);
+    attachSessionListener("failed", onFailed);
+  } catch (error) {
+    stopRetry(false);
+    throw error;
   }
 
-  session.on?.("confirmed", onConfirmed);
-  session.on?.("ended", onEnded);
-  session.on?.("failed", onFailed);
+  return () => stopRetry(false);
 }

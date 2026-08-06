@@ -8,7 +8,11 @@ import {
   type SipDebugSetting,
 } from "../modules/debug/sip-debug.storage";
 
-type StartOpts = { debug?: boolean | string };
+type StartOpts = {
+  debug?: boolean | string;
+  beforeStart?: (ua: UA) => void;
+  onStartError?: (ua: UA) => void;
+};
 
 export class SipUserAgent {
   private _ua: UA | null = null;
@@ -29,14 +33,56 @@ export class SipUserAgent {
     config: Omit<SipConfiguration, "debug">,
     opts?: StartOpts
   ): UA {
-    this.stop();
+    const ua = this.prepareStart(uri, password, config);
+    return this.startPrepared(ua, opts);
+  }
+
+  public prepareStart(
+    uri: string,
+    password: string,
+    config: Omit<SipConfiguration, "debug">
+  ): UA {
     const uaCfg = this.buildUAConfig(config, uri, password);
     this.ensureValid(uaCfg);
+    return this.createUA(uaCfg);
+  }
+
+  public startPrepared(ua: UA, opts?: StartOpts): UA {
+    this.stop();
     this.applyDebug(opts?.debug);
-    const ua = this.createUA(uaCfg);
-    ua.start();
     this._ua = ua;
+    try {
+      opts?.beforeStart?.(ua);
+      ua.start();
+    } catch (error) {
+      try {
+        opts?.onStartError?.(ua);
+      } catch (cleanupError) {
+        console.error(
+          "[react-jssip-kit] UA handler cleanup failed",
+          cleanupError
+        );
+      }
+      try {
+        ua.stop();
+      } catch (cleanupError) {
+        console.error(
+          "[react-jssip-kit] UA start cleanup failed",
+          cleanupError
+        );
+      }
+      if (this._ua === ua) this._ua = null;
+      throw error;
+    }
     return ua;
+  }
+
+  public validateStart(
+    uri: string,
+    password: string,
+    config: Omit<SipConfiguration, "debug">
+  ): void {
+    this.prepareStart(uri, password, config);
   }
 
   public register(): void {

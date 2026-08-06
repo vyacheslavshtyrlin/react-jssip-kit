@@ -15,7 +15,11 @@ import type {
 } from "../../sip/types";
 import { createSessionHandlers } from "./session.handlers";
 import type { SessionManager } from "./session.manager";
-import { clearSessionsState, holdOtherSessions, removeSessionState } from "./session.state.projector";
+import {
+  clearSessionsState,
+  holdOtherSessions,
+  removeSessionState,
+} from "./session.state.projector";
 import { SessionLifecycle } from "./session.lifecycle";
 import type { MicRecoveryManager } from "../media/mic-recovery.manager";
 
@@ -39,6 +43,8 @@ export class SessionModule {
       emit: (event, payload) => deps.emitter.emit(event, payload),
       attachSessionHandlers: (sessionId, session) =>
         this.attachSessionHandlers(sessionId, session),
+      cleanupSession: (sessionId, session) =>
+        this.cleanupSession(sessionId, session),
       getMaxSessionCount: deps.getMaxSessionCount,
     });
   }
@@ -65,6 +71,8 @@ export class SessionModule {
 
   answerSession(sessionId: string, options: AnswerOptions = {}) {
     if (!sessionId || !this.sessionExists(sessionId)) return false;
+    if (options.mediaStream)
+      this.setSessionMedia(sessionId, options.mediaStream);
     return this.deps.sessionManager.answer(sessionId, options);
   }
 
@@ -123,7 +131,10 @@ export class SessionModule {
     return false;
   }
 
-  attendedTransferSession(sessionId: string, replaceSessionId: string): boolean {
+  attendedTransferSession(
+    sessionId: string,
+    replaceSessionId: string
+  ): boolean {
     const resolvedA = this.resolveExistingSessionId(sessionId);
     const resolvedB = this.resolveExistingSessionId(replaceSessionId);
     if (!resolvedA || !resolvedB) return false;
@@ -201,6 +212,8 @@ export class SessionModule {
       if (session) this.detachSessionHandlers(sessionId, session);
     }
     this.lifecycle.cleanupAllCallStats();
+    this.lifecycle.cleanupAllAudioBindings();
+    this.lifecycle.releaseAllIncomingSessions();
     this.deps.sessionManager.cleanupAllSessions();
     this.deps.micRecovery.cleanupAll();
     this.sessionHandlers.clear();
@@ -224,15 +237,28 @@ export class SessionModule {
   private detachSessionHandlers(sessionId: string, session: RTCSession) {
     const handlers = this.sessionHandlers.get(sessionId);
     if (!handlers || !session) return;
-    (Object.keys(handlers) as (keyof RTCSessionEventMap)[]).forEach((ev) => {
-      const h = handlers[ev];
-      if (h) session.off(ev, h);
-    });
-    this.sessionHandlers.delete(sessionId);
+    try {
+      (Object.keys(handlers) as (keyof RTCSessionEventMap)[]).forEach((ev) => {
+        const h = handlers[ev];
+        if (!h) return;
+        try {
+          session.off(ev, h);
+        } catch (error) {
+          console.error(
+            "[react-jssip-kit] session handler detach failed",
+            error
+          );
+        }
+      });
+    } finally {
+      this.sessionHandlers.delete(sessionId);
+    }
   }
 
   private cleanupSession(sessionId: string, session?: RTCSession) {
     this.lifecycle.cleanupCallStats(sessionId); // Fix 4: remove stats listeners
+    this.lifecycle.cleanupAudioBinding(sessionId);
+    this.lifecycle.releaseIncomingSession(sessionId);
     const targetSession =
       session ??
       this.deps.sessionManager.getSession(sessionId) ??
@@ -249,12 +275,10 @@ export class SessionModule {
     sessionId: string,
     session: RTCSession
   ): Partial<RTCSessionEventMap> {
-    const rtc = this.deps.sessionManager.getOrCreateRtc(sessionId, session);
     return createSessionHandlers({
       emitter: this.deps.emitter,
       state: this.deps.state,
-      rtc,
-      detachSessionHandlers: () => this.cleanupSession(sessionId, session),
+      cleanupSession: () => this.cleanupSession(sessionId, session),
       enableMicrophoneRecovery: (confirmedSessionId) =>
         this.deps.micRecovery.enable(confirmedSessionId),
       holdOtherActiveSessions: () =>

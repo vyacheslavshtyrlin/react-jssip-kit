@@ -119,11 +119,6 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
   }
 
   public connect(uri: string, password: string, config: SipConfiguration) {
-    this.intentionalDisconnect = false;
-    this.reconnectManager?.cancel();
-    this.reconnectManager = null;
-    this._stopUA();
-    this.stateStore.setState({ sipStatus: SipStatus.Connecting });
     const {
       debug: cfgDebug,
       enableMicRecovery,
@@ -134,22 +129,45 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
       reconnect,
       ...uaCfg
     } = config;
-    this.lastConnectParams = { uri, password, config };
-    this.configDebug = cfgDebug;
-    this.reconnectConfig = reconnect?.enabled ? reconnect : null;
-    this.maxSessionCount =
-      typeof maxSessionCount === "number" ? maxSessionCount : Infinity;
-    this.iceCandidateReadyDelayMs =
-      typeof iceCandidateReadyDelayMs === "number"
-        ? iceCandidateReadyDelayMs
-        : undefined;
-    this.micRecovery.configure({
+    const resolvedMaxSessionCount =
+      this.resolveMaxSessionCount(maxSessionCount);
+    const resolvedReconnectConfig = this.resolveReconnectConfig(reconnect);
+    const resolvedIceCandidateReadyDelayMs = this.resolveIceCandidateReadyDelay(
+      iceCandidateReadyDelayMs
+    );
+    const micRecoveryConfig = {
       enabled: Boolean(enableMicRecovery),
       intervalMs: micRecoveryIntervalMs,
       maxRetries: micRecoveryMaxRetries,
-    });
+    };
+    this.micRecovery.validateConfig(micRecoveryConfig);
+    const nextUa = this.uaModule.prepareStart(uri, password, uaCfg);
+
+    this.intentionalDisconnect = false;
+    this.reconnectManager?.cancel();
+    this.reconnectManager = null;
+    this._stopUA();
+    this.stateStore.reset({ sipStatus: SipStatus.Connecting });
+    this.lastConnectParams = {
+      uri,
+      password,
+      config: {
+        ...config,
+        reconnect: reconnect ? { ...reconnect } : undefined,
+      },
+    };
+    this.configDebug = cfgDebug;
+    this.reconnectConfig = resolvedReconnectConfig;
+    this.maxSessionCount = resolvedMaxSessionCount;
+    this.iceCandidateReadyDelayMs = resolvedIceCandidateReadyDelayMs;
+    this.micRecovery.configure(micRecoveryConfig);
     const debug = this.resolveDebug(cfgDebug);
-    this.uaModule.start(uri, password, uaCfg, debug);
+    try {
+      this.uaModule.startPrepared(nextUa, debug);
+    } catch (error) {
+      this.stateStore.reset();
+      throw error;
+    }
     this.sessionModule.setDebugEnabled(Boolean(debug));
     this.unloadRuntime.attach(() => {
       this.hangupAll();
@@ -183,11 +201,7 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
     if (this.intentionalDisconnect) return;
 
     if (this.reconnectConfig?.enabled) {
-      this.stateStore.setState({
-        sessions: [],
-        sessionsById: {},
-        sessionIds: [],
-        error: null,
+      this.stateStore.reset({
         sipStatus: SipStatus.Reconnecting,
       });
 
@@ -219,11 +233,20 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
       return;
     }
     const { uri, password, config } = this.lastConnectParams;
-    const { debug: cfgDebug, ...uaCfg } = config;
+    const cfgDebug = config.debug;
+    const uaCfg = { ...config };
+    delete uaCfg.debug;
+    delete uaCfg.enableMicRecovery;
+    delete uaCfg.micRecoveryIntervalMs;
+    delete uaCfg.micRecoveryMaxRetries;
+    delete uaCfg.maxSessionCount;
+    delete uaCfg.iceCandidateReadyDelayMs;
+    delete uaCfg.reconnect;
     this.configDebug = cfgDebug;
-    this.stateStore.setState({ sipStatus: SipStatus.Connecting });
+    this.stateStore.reset({ sipStatus: SipStatus.Connecting });
     const debug = this.resolveDebug(cfgDebug);
-    this.uaModule.start(uri, password, uaCfg, debug);
+    const nextUa = this.uaModule.prepareStart(uri, password, uaCfg);
+    this.uaModule.startPrepared(nextUa, debug);
     this.unloadRuntime.attach(() => {
       this.hangupAll();
       this.disconnect();
@@ -240,21 +263,29 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
     // newRTCSession synchronously inside ua.call(). By the time ua.call()
     // returns, handleNewRTCSession has already run and getOrCreateRtc has
     // already consumed pendingMedia — no post-call patching needed.
-    if (callOptions.mediaStream) {
-      this.sessionModule.setPendingMedia(callOptions.mediaStream);
-    }
-    try {
-      const ua = this.userAgent.getUA();
-      ua?.call(target, callOptions);
-    } catch (e: unknown) {
+    const ua = this.userAgent.getUA();
+    if (!ua) {
       this.sessionModule.setPendingMedia(null);
+      return;
+    }
+    const existingSessionIds = new Set(this.getSessionIds());
+    this.sessionModule.setPendingMedia(callOptions.mediaStream ?? null);
+    try {
+      ua.call(target, callOptions);
+    } catch (e: unknown) {
       console.error(e);
       // ua.call() fires newRTCSession synchronously before throwing, so a
       // Dialing session may already be in state. Clean it up to avoid a hang.
       const state = this.stateStore.getState();
       state.sessionIds
-        .filter((id) => state.sessionsById[id]?.status === CallStatus.Dialing)
+        .filter(
+          (id) =>
+            !existingSessionIds.has(id) &&
+            state.sessionsById[id]?.status === CallStatus.Dialing
+        )
         .forEach((id) => this.sessionModule.cleanupSessionById(id));
+    } finally {
+      this.sessionModule.setPendingMedia(null);
     }
   }
 
@@ -322,6 +353,54 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
     );
   }
 
+  private resolveMaxSessionCount(value?: number): number {
+    if (value == null || value === Infinity) return Infinity;
+    if (Number.isSafeInteger(value) && value >= 0) return value;
+    throw new RangeError(
+      "maxSessionCount must be a non-negative safe integer or Infinity"
+    );
+  }
+
+  private resolveIceCandidateReadyDelay(value?: number): number | undefined {
+    if (value == null) return undefined;
+    if (Number.isFinite(value) && value >= 0) return value;
+    throw new RangeError(
+      "iceCandidateReadyDelayMs must be a finite non-negative number"
+    );
+  }
+
+  private resolveReconnectConfig(
+    value?: SipConfiguration["reconnect"]
+  ): ReconnectConfig | null {
+    if (!value?.enabled) return null;
+    if (
+      value.maxAttempts != null &&
+      (!Number.isSafeInteger(value.maxAttempts) || value.maxAttempts < 0)
+    ) {
+      throw new RangeError(
+        "reconnect.maxAttempts must be a non-negative integer"
+      );
+    }
+    if (
+      value.delayMs != null &&
+      (!Number.isFinite(value.delayMs) || value.delayMs < 0)
+    ) {
+      throw new RangeError(
+        "reconnect.delayMs must be a finite non-negative number"
+      );
+    }
+    if (
+      value.backoffMultiplier != null &&
+      (!Number.isFinite(value.backoffMultiplier) ||
+        value.backoffMultiplier <= 0)
+    ) {
+      throw new RangeError(
+        "reconnect.backoffMultiplier must be a finite positive number"
+      );
+    }
+    return { ...value };
+  }
+
   private cleanupAllSessions() {
     this.sessionModule.cleanupAllSessions();
   }
@@ -331,9 +410,6 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
   }
 
   public answerSession(sessionId: string, options: AnswerOptions = {}) {
-    if (options.mediaStream) {
-      this.sessionModule.setSessionMedia(sessionId, options.mediaStream);
-    }
     return this.sessionModule.answerSession(sessionId, options);
   }
 
@@ -419,4 +495,3 @@ export function createSipClientInstance(options?: SipClientOptions): SipClient {
 }
 
 export { createSipEventManager };
-

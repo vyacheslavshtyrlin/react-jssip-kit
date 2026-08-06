@@ -31,9 +31,17 @@ export function createSipEventManager(client: SipClient): SipEventManager {
       let attachedSession: RTCSession | null = null;
 
       const detach = () => {
-        if (!attachedSession) return;
-        attachedSession.off(event, wrapped);
+        const session = attachedSession;
         attachedSession = null;
+        if (!session) return;
+        try {
+          session.off(event, wrapped);
+        } catch (error) {
+          console.error(
+            "[react-jssip-kit] session event listener detach failed",
+            error
+          );
+        }
       };
 
       const attach = (session: RTCSession | null) => {
@@ -43,8 +51,15 @@ export function createSipEventManager(client: SipClient): SipEventManager {
         if (attachedSession === session) return;
 
         detach();
-        attachedSession = session;
-        attachedSession.on(event, wrapped);
+        try {
+          session.on(event, wrapped);
+          attachedSession = session;
+        } catch (error) {
+          console.error(
+            "[react-jssip-kit] session event listener attach failed",
+            error
+          );
+        }
       };
 
       const offNewSession = client.on("newRTCSession", (payload) => {

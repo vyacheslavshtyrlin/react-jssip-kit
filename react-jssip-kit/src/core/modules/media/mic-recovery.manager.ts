@@ -35,7 +35,28 @@ export class MicRecoveryManager {
     this.deps = deps;
   }
 
+  validateConfig(config: MicRecoveryConfig) {
+    if (
+      config.intervalMs != null &&
+      (!Number.isFinite(config.intervalMs) || config.intervalMs <= 0)
+    ) {
+      throw new RangeError(
+        "micRecoveryIntervalMs must be a finite positive number"
+      );
+    }
+    if (
+      config.maxRetries != null &&
+      config.maxRetries !== Infinity &&
+      (!Number.isSafeInteger(config.maxRetries) || config.maxRetries < 0)
+    ) {
+      throw new RangeError(
+        "micRecoveryMaxRetries must be a non-negative integer or Infinity"
+      );
+    }
+  }
+
   configure(config: MicRecoveryConfig) {
+    this.validateConfig(config);
     if (typeof config.enabled === "boolean") {
       this.enabled = config.enabled;
     }
@@ -52,6 +73,7 @@ export class MicRecoveryManager {
     options: MicrophoneRecoveryOptions = {}
   ): () => void {
     if (!this.enabled) return () => {};
+    this.validateConfig(options);
 
     this.disable(sessionId);
 
@@ -62,7 +84,7 @@ export class MicRecoveryManager {
     const startedAt = Date.now();
     const warmupMs = Math.max(intervalMs * 2, 2000);
 
-    const tick = async () => {
+    const runTick = async () => {
       if (stopped || retries >= maxRetries) return;
 
       const rtc = this.deps.getRtc(sessionId);
@@ -109,6 +131,7 @@ export class MicRecoveryManager {
         senderLive,
       });
       this.deps.onDrop(sessionId, trackLive, senderLive);
+      if (stopped) return;
 
       retries += 1;
       if (trackLive && !senderLive && track) {
@@ -120,17 +143,29 @@ export class MicRecoveryManager {
       // If both track and sender are not live, recovery stops here.
     };
 
+    let tickInFlight = false;
+    const tick = () => {
+      if (stopped || tickInFlight || retries >= maxRetries) return;
+      tickInFlight = true;
+      void runTick()
+        .catch((error) => {
+          console.error("[react-jssip-kit] microphone recovery failed", error);
+        })
+        .finally(() => {
+          tickInFlight = false;
+        });
+    };
+
     const timer = setInterval(() => {
-      void tick();
+      tick();
     }, intervalMs);
-    void tick();
 
     const session = this.deps.getSession(sessionId);
     let trackedPc: RTCPeerConnection | undefined = (session as any)?.connection;
 
     const onIceChange = () => {
       const state = trackedPc?.iceConnectionState;
-      if (state === "failed" || state === "disconnected") void tick();
+      if (state === "failed" || state === "disconnected") tick();
     };
 
     const attachIceListener = (newPc: RTCPeerConnection | undefined) => {
@@ -151,9 +186,6 @@ export class MicRecoveryManager {
     // Catches tracks that died at or just before confirmed.
     const rtcNow = this.deps.getRtc(sessionId);
     const initialTrack = rtcNow?.mediaStream?.getAudioTracks?.()[0] ?? null;
-    if (initialTrack && initialTrack.readyState !== "live") {
-      this.deps.onDrop(sessionId, false, false);
-    }
 
     // Real-time detection via track.ended — no need to wait for poll interval.
     const onTrackEnded = () => {
@@ -165,28 +197,43 @@ export class MicRecoveryManager {
     initialTrack?.addEventListener?.("ended", onTrackEnded, { once: true });
 
     const stop = () => {
+      if (stopped) return;
       stopped = true;
       clearInterval(timer);
       trackedPc?.removeEventListener?.("iceconnectionstatechange", onIceChange);
-      (session as any)?.off?.("peerconnection", onPeerConnection);
+      try {
+        (session as any)?.off?.("peerconnection", onPeerConnection);
+      } catch (error) {
+        console.error(
+          "[react-jssip-kit] microphone recovery cleanup failed",
+          error
+        );
+      }
       initialTrack?.removeEventListener?.("ended", onTrackEnded);
     };
     this.active.set(sessionId, { stop });
+    if (initialTrack && initialTrack.readyState !== "live") {
+      this.deps.onDrop(sessionId, false, false);
+    }
+    tick();
     return stop;
   }
 
   disable(sessionId: string) {
     const entry = this.active.get(sessionId);
     if (!entry) return false;
-    entry.stop();
-    this.active.delete(sessionId);
-    this.syncedSenderTrackId.delete(sessionId);
+    try {
+      entry.stop();
+    } finally {
+      this.active.delete(sessionId);
+      this.syncedSenderTrackId.delete(sessionId);
+    }
     return true;
   }
 
   cleanupAll() {
-    this.active.forEach((entry) => entry.stop());
-    this.active.clear();
-    this.syncedSenderTrackId.clear();
+    for (const sessionId of Array.from(this.active.keys())) {
+      this.disable(sessionId);
+    }
   }
 }

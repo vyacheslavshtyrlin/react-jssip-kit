@@ -1,6 +1,26 @@
 # Changelog
 
+## 1.1.3
+
+- Fixed: `maxSessionCount` now limits only simultaneous incoming sessions; outgoing sessions do not consume the limit. Excess incoming INVITEs are rejected with SIP `486 Busy Here`.
+- Fixed: max-limit rejection now forwards the native JsSIP `failed` event emitted by `RTCSession.terminate()` through a one-shot listener that is also removed when termination throws. The payload remains unmodified and therefore does not synthesize `status_code` or `reason_phrase`.
+- Fixed: incoming-session slots are reserved atomically and released on every terminal path, partial initialization rollback, and full cleanup.
+- Fixed: session registration is synchronous, and stale queued state updates can no longer restore an outdated SIP status after disconnect/reset.
+- Fixed: UA lifecycle state written by event handlers is now updated synchronously before the corresponding public events are emitted; the unnecessary `queueMicrotask` batching layer and `batchSet` contract were removed.
+- Fixed: exceptions thrown by SIP event listeners or state subscribers are isolated, logged, and no longer interrupt session lifecycle or other subscribers.
+- Fixed: `pendingMedia` is always cleared after `call()`; a failed outgoing call now removes only sessions created by that call instead of all `dialing` sessions.
+- Fixed: caller-provided `MediaStream` tracks are treated as externally owned and are detached without being stopped when one session is cleaned up.
+- Fixed: `answerSession()` validates the session before storing its media stream, preventing media from being attached to a nonexistent session.
+- Fixed: SIP/reconnect configuration is validated before the active UA is stopped; synchronous reconnect failures are logged and continue through the configured retry schedule.
+- Fixed: partial session setup is rolled back through the common cleanup path, and terminal events no longer run WebRTC/state cleanup twice.
+- Fixed: audio-bind retry timers, session listeners, PeerConnection listeners, and remote-track diagnostics are disposed on terminal/full-cleanup paths; partial listener attachment is rolled back and individual detach failures are isolated.
+- Fixed: microphone recovery serializes polling attempts, handles rejected `replaceTrack()` calls, validates polling interval/retry configuration before disconnecting the active UA, and stops safely when a synchronous `micDrop` listener triggers cleanup.
+- Fixed: `useCallQuality()` no longer overlaps `getStats()` calls or applies stale results after a session/PeerConnection change.
+- Fixed: media observers now remain subscribed when mounted before their session exists; `useSessionMedia()` also invalidates its track cache when the PeerConnection changes.
+- Fixed: JsSIP constructor validation now runs before the active UA is stopped; UA handlers are attached before transport startup, stale reconnect handlers are detached, and partial handler attachment/startup is rolled back safely.
+
 ## 1.0.5
+
 - Added: `SipSessionState.headers` — SIP headers from the initial INVITE are now stored in session state as `Record<string, string>` (lowercase keys). Accessible via `useSipSession(sessionId)?.headers['x-custom-header']` without subscribing to `newRTCSession`.
 - Fixed: `unhold` event no longer allows two sessions to be simultaneously Active — other Active sessions are now held automatically, consistent with the behaviour on `newRTCSession`.
 - Fixed: `accepted` event now also holds other Active sessions before marking the answered session as Active, closing an edge case where a manual `unhold` between incoming and answering could result in two Active sessions.
@@ -17,6 +37,7 @@
 - Removed: `tokens.ts` — dead file with no imports.
 
 ## 1.0.4
+
 - Added: `useMicDrop` hook — fires when `MicRecoveryManager` detects an audio track or sender drop. Payload: `{ sessionId, trackLive, senderLive }`. When `trackLive=true` the manager self-heals via `replaceAudioTrack`; when `trackLive=false` the application should call `getUserMedia` + `setSessionMedia` + `reinvite`.
 - Added: `useSessionIceFailed` hook — fires once per session when `iceConnectionState` reaches `"failed"`. Intended for ICE restart: `reinvite(sessionId, { rtcOfferConstraints: { iceRestart: true } })`. Deduped by flag — emits at most once per session lifetime regardless of how many state-change events the PC fires.
 - Added: `MicDropPayload` and `SessionIceFailedPayload` public types.
@@ -25,6 +46,7 @@
 - Fixed: ICE failed listener is properly removed in every session terminal path and on `peerconnection` re-fire (reinvite), preventing stale DOM event listeners on a dead `RTCPeerConnection`.
 
 ## 1.0.3
+
 - Fixed: calling `connect()` during auto-reconnect no longer leaves the old `ReconnectManager` running in the background.
 - Fixed: reconnect manager now cancels immediately on WebSocket `connected` event, not only on `registered` — fixes stale reconnect loop when SIP registration is disabled.
 - Added: `useCallTimer(sessionId?)` hook — returns elapsed seconds since call was accepted, updates every second.
@@ -37,6 +59,7 @@
 - Fixed: audio drop bug (caller could not hear callee) caused by transient ICE states (`disconnected`, `checking`) triggering premature `srcObject` reset in `useSessionMedia` / `CallPlayer`. Now only reacts to final states (`connected`, `completed`, `failed`, `closed`).
 
 ## 1.0.2
+
 - Breaking: API surface is now explicitly fixed at package root exports (`src/index.ts`). Internal `core/*` modules are not part of the public contract.
 - Breaking: `SipContext` is no longer exported from package root; use `SipProvider` + hooks (`useSipKernel`, etc.).
 - Breaking: `createSipKernel()` no longer accepts injected `client`/`eventManager`; kernel composition is internal-only.
@@ -46,6 +69,7 @@
 - Docs: README updated with explicit public API contract and internal boundary.
 
 ## 0.8.0
+
 - Breaking: `SipProvider` is now kernel-only and requires `kernel` prop.
 - Added `createSipKernel()` and `SipKernel` as the primary composition API.
 - Added `useSipKernel()` hook for explicit direct kernel access.
@@ -54,13 +78,16 @@
 - Restored missing `src/jssip-lib/core/sipErrorHandler.ts` to align source with published typings/build output.
 
 ## 0.4.0
+
 - Breaking: public client control methods now require an explicit `sessionId` as the first argument (`answer`, `hangup`, mute/hold toggles, DTMF/transfer helpers).
 - Added exports for client-facing types (events, options, RTCSession/UA maps) from the package entrypoint for easier consumption.
 - Allow setting media on a session id before the session object is attached to retain pending streams.
 - When debug is enabled, expose `window.sipState()` and `window.sipSessions()` helpers for quick inspection (stubbed safely when disabled).
 
 ## 0.1.1
+
 - Exported `SipSessionState` from the public entrypoint and aligned demo/imports to the new package name.
 
 ## 0.1.0
+
 - Initial public release: React provider/hooks around bundled JsSIP client.

@@ -10,6 +10,7 @@ import type {
   JsSIPEventPayload,
   RTCSession,
   RTCSessionEvent,
+  RTCSessionEventMap,
   TerminateOptions,
 } from "../../sip/types";
 import { sipDebugLogger } from "../debug/sip-debug.logger";
@@ -23,6 +24,7 @@ type Deps = {
     payload?: JsSIPEventPayload<K>
   ) => void;
   attachSessionHandlers: (sessionId: string, session: RTCSession) => void;
+  cleanupSession: (sessionId: string, session: RTCSession) => void;
   getMaxSessionCount: () => number;
 };
 
@@ -31,13 +33,17 @@ export class SessionLifecycle {
   private readonly sessionManager: SessionManager;
   private readonly emit: Deps["emit"];
   private readonly attachSessionHandlers: Deps["attachSessionHandlers"];
+  private readonly cleanupSession: Deps["cleanupSession"];
   private readonly getMaxSessionCount: Deps["getMaxSessionCount"];
+  private readonly incomingSessionIds = new Set<string>();
+  private readonly audioBindingCleanups = new Map<string, () => void>();
 
   constructor(deps: Deps) {
     this.state = deps.state;
     this.sessionManager = deps.sessionManager;
     this.emit = deps.emit;
     this.attachSessionHandlers = deps.attachSessionHandlers;
+    this.cleanupSession = deps.cleanupSession;
     this.getMaxSessionCount = deps.getMaxSessionCount;
   }
 
@@ -47,53 +53,125 @@ export class SessionLifecycle {
 
   handleNewRTCSession(e: RTCSessionEvent) {
     const session = e.session;
-    const sessionId = String(session.id ?? crypto.randomUUID?.() ?? Date.now());
+    const sessionId = String(
+      session.id ??
+        globalThis.crypto?.randomUUID?.() ??
+        `${Date.now()}-${Math.random()}`
+    );
 
-    const currentSessions = this.state.getState().sessions;
-    if (e.originator === "remote" && currentSessions.length >= this.getMaxSessionCount()) {
-      try {
-        const terminateOptions: TerminateOptions = {
-          status_code: 486,
-          reason_phrase: "Busy Here",
-        };
-        session.terminate(terminateOptions);
-      } catch {
-        /* ignore termination errors */
-      }
+    if (e.originator === "remote" && !this.reserveIncomingSession(sessionId)) {
+      this.rejectSession(session, 486, "Busy Here", true);
       return;
     }
 
-    const rtc = this.sessionManager.getOrCreateRtc(sessionId, session);
-    this.sessionManager.setSession(sessionId, session);
-    this.attachSessionHandlers(sessionId, session);
-    this.attachCallStatsLogging(sessionId, session);
+    try {
+      const rtc = this.sessionManager.getOrCreateRtc(sessionId, session);
+      this.sessionManager.setSession(sessionId, session);
+      this.attachSessionHandlers(sessionId, session);
+      this.attachCallStatsLogging(sessionId, session);
 
-    if (e.originator === "local" && !rtc.mediaStream) {
-      this.bindLocalOutgoingAudio(sessionId, session);
+      if (e.originator === "local" && !rtc.mediaStream) {
+        this.bindLocalOutgoingAudio(sessionId, session);
+      }
+      if (e.originator === "remote") {
+        this.bindRemoteIncomingAudio(sessionId, session);
+      }
+
+      holdOtherSessions(this.state, sessionId, (id) => {
+        const otherRtc = this.sessionManager.getRtc(id);
+        otherRtc?.hold();
+      });
+
+      upsertSessionState(this.state, sessionId, {
+        direction: e.originator,
+        from: e.originator === "remote" ? e.request.from.uri.user : null,
+        to: e.request.to.uri.user,
+        status:
+          e.originator === "remote" ? CallStatus.Ringing : CallStatus.Dialing,
+        headers: this.extractSipHeaders(e.request),
+      });
+
+      this.emit("newRTCSession", e);
+    } catch (error) {
+      this.releaseIncomingSession(sessionId);
+      try {
+        this.cleanupSession(sessionId, session);
+      } catch (cleanupError) {
+        console.error(
+          "[react-jssip-kit] session rollback failed",
+          cleanupError
+        );
+      }
+      if (e.originator === "remote") {
+        this.rejectSession(session, 500, "Internal Error");
+        return;
+      }
+      throw error;
     }
-    if (e.originator === "remote") {
-      this.bindRemoteIncomingAudio(sessionId, session);
+  }
+
+  public releaseIncomingSession(sessionId: string) {
+    this.incomingSessionIds.delete(sessionId);
+  }
+
+  public releaseAllIncomingSessions() {
+    this.incomingSessionIds.clear();
+  }
+
+  private reserveIncomingSession(sessionId: string) {
+    if (this.incomingSessionIds.has(sessionId)) return true;
+    if (this.incomingSessionIds.size >= this.getMaxSessionCount()) return false;
+    this.incomingSessionIds.add(sessionId);
+    return true;
+  }
+
+  private rejectSession(
+    session: RTCSession,
+    statusCode: number,
+    reasonPhrase: string,
+    forwardFailed = false
+  ) {
+    let cleanupFailedListener: (() => void) | undefined;
+    if (forwardFailed) {
+      const onFailed: RTCSessionEventMap["failed"] = (failedEvent) => {
+        cleanupFailedListener?.();
+        this.emit("failed", failedEvent);
+      };
+
+      cleanupFailedListener = () => {
+        cleanupFailedListener = undefined;
+        try {
+          session.off("failed", onFailed);
+        } catch (error) {
+          console.error(
+            "[react-jssip-kit] failed listener detach failed",
+            error
+          );
+        }
+      };
+
+      try {
+        session.on("failed", onFailed);
+      } catch (error) {
+        cleanupFailedListener();
+        console.error("[react-jssip-kit] failed listener attach failed", error);
+      }
     }
 
-    holdOtherSessions(this.state, sessionId, (id) => {
-      const otherRtc = this.sessionManager.getRtc(id);
-      otherRtc?.hold();
-    });
-
-    upsertSessionState(this.state, sessionId, {
-      direction: e.originator,
-      from: e.originator === "remote" ? e.request.from.uri.user : null,
-      to: e.request.to.uri.user,
-      status:
-        e.originator === "remote" ? CallStatus.Ringing : CallStatus.Dialing,
-      headers: this.extractSipHeaders(e.request),
-    });
-
-    this.emit("newRTCSession", e);
+    try {
+      const terminateOptions: TerminateOptions = {
+        status_code: statusCode,
+        reason_phrase: reasonPhrase,
+      };
+      session.terminate(terminateOptions);
+    } catch (error) {
+      cleanupFailedListener?.();
+      console.error("[react-jssip-kit] session rejection failed", error);
+    }
   }
 
   private bindLocalOutgoingAudio(sessionId: string, session: RTCSession) {
-    createAudioBindRetry({
+    const stopRetry = createAudioBindRetry({
       session,
       tryBind: (pc) => {
         // Already bound externally or from a previous attempt — signal success.
@@ -124,6 +202,7 @@ export class SessionLifecycle {
         );
       },
     });
+    this.setAudioBindingCleanup(sessionId, stopRetry);
   }
 
   private bindRemoteIncomingAudio(sessionId: string, session: RTCSession) {
@@ -162,7 +241,7 @@ export class SessionLifecycle {
       attachedTrack = null;
     };
 
-    createAudioBindRetry({
+    const stopRetry = createAudioBindRetry({
       session,
       listenPcTrackEvent: true,
       tryBind: (pc) => {
@@ -206,6 +285,32 @@ export class SessionLifecycle {
         );
       },
     });
+    this.setAudioBindingCleanup(sessionId, () => {
+      stopRetry();
+      detachTrackListeners();
+    });
+  }
+
+  private setAudioBindingCleanup(sessionId: string, cleanup: () => void) {
+    this.cleanupAudioBinding(sessionId);
+    this.audioBindingCleanups.set(sessionId, cleanup);
+  }
+
+  public cleanupAudioBinding(sessionId: string) {
+    const cleanup = this.audioBindingCleanups.get(sessionId);
+    try {
+      cleanup?.();
+    } catch (error) {
+      console.error("[react-jssip-kit] audio binding cleanup failed", error);
+    } finally {
+      this.audioBindingCleanups.delete(sessionId);
+    }
+  }
+
+  public cleanupAllAudioBindings() {
+    for (const sessionId of Array.from(this.audioBindingCleanups.keys())) {
+      this.cleanupAudioBinding(sessionId);
+    }
   }
 
   private callStatsCleanups = new Map<string, () => void>();
@@ -218,25 +323,53 @@ export class SessionLifecycle {
       sipDebugLogger.stopCallStatsLogging(sessionId);
     };
 
-    session.on?.("confirmed", onConfirmed);
-    session.on?.("ended", onEnd);
-    session.on?.("failed", onEnd);
-
-    this.callStatsCleanups.set(sessionId, () => {
-      session.off?.("confirmed", onConfirmed);
-      session.off?.("ended", onEnd);
-      session.off?.("failed", onEnd);
-    });
+    const cleanup = () => {
+      const listeners = [
+        ["confirmed", onConfirmed],
+        ["ended", onEnd],
+        ["failed", onEnd],
+      ] as const;
+      listeners.forEach(([event, handler]) => {
+        try {
+          session.off?.(event, handler);
+        } catch (error) {
+          console.error(
+            "[react-jssip-kit] call stats listener detach failed",
+            error
+          );
+        }
+      });
+    };
+    this.callStatsCleanups.set(sessionId, cleanup);
+    try {
+      session.on?.("confirmed", onConfirmed);
+      session.on?.("ended", onEnd);
+      session.on?.("failed", onEnd);
+    } catch (error) {
+      this.cleanupCallStats(sessionId);
+      throw error;
+    }
   }
 
   public cleanupCallStats(sessionId: string) {
     const cleanup = this.callStatsCleanups.get(sessionId);
-    cleanup?.();
-    this.callStatsCleanups.delete(sessionId);
+    try {
+      cleanup?.();
+    } catch (error) {
+      console.error("[react-jssip-kit] call stats cleanup failed", error);
+    } finally {
+      this.callStatsCleanups.delete(sessionId);
+    }
   }
 
   public cleanupAllCallStats() {
-    this.callStatsCleanups.forEach((cleanup) => cleanup());
+    this.callStatsCleanups.forEach((cleanup) => {
+      try {
+        cleanup();
+      } catch (error) {
+        console.error("[react-jssip-kit] call stats cleanup failed", error);
+      }
+    });
     this.callStatsCleanups.clear();
   }
 

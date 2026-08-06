@@ -1,3 +1,4 @@
+import type { UA } from "jssip";
 import type { SipUserAgent } from "../../sip/user-agent";
 import type { SipConfiguration, UAEventMap } from "../../sip/types";
 import { createUAHandlers } from "./ua.handlers";
@@ -24,8 +25,25 @@ export class UaModule {
     config: Omit<SipConfiguration, "debug">,
     debug?: boolean | string
   ) {
-    this.userAgent.start(uri, password, config, { debug });
-    this.attachHandlers();
+    const ua = this.prepareStart(uri, password, config);
+    this.startPrepared(ua, debug);
+  }
+
+  prepareStart(
+    uri: string,
+    password: string,
+    config: Omit<SipConfiguration, "debug">
+  ) {
+    return this.userAgent.prepareStart(uri, password, config);
+  }
+
+  startPrepared(ua: UA, debug?: boolean | string) {
+    this.stop();
+    this.userAgent.startPrepared(ua, {
+      debug,
+      beforeStart: () => this.attachHandlers(),
+      onStartError: () => this.detachHandlers(),
+    });
   }
 
   stop() {
@@ -59,8 +77,13 @@ export class UaModule {
       const handler = this.uaHandlers[event];
       // jssip 3.13.x UA.d.ts only declares `on`; removeListener is
       // available at runtime via EventEmitter but not typed in the declaration
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (handler) (ua as any).removeListener(event, handler);
+      if (!handler) return;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (ua as any).removeListener(event, handler);
+      } catch (error) {
+        console.error("[react-jssip-kit] UA handler detach failed", error);
+      }
     });
   }
 }

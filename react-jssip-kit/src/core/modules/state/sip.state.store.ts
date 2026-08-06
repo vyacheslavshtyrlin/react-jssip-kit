@@ -17,8 +17,6 @@ export class SipStateStore implements StateAdapter {
   };
   private listeners = new Set<SipStateListener>();
   private publicListeners = new Set<PublicSipStateListener>();
-  private pendingState: Partial<InternalSipState> | null = null;
-  private updateScheduled = false;
 
   getState(): InternalSipState {
     return this.state;
@@ -76,45 +74,29 @@ export class SipStateStore implements StateAdapter {
     this.emit(publicChanged);
   }
 
-  batchSet(partial: Partial<InternalSipState>) {
-    if (!partial || Object.keys(partial).length === 0) return;
-
-    const pending = this.pendingState ?? {};
-    let hasChanges = false;
-
-    (Object.keys(partial) as (keyof InternalSipState)[]).forEach((key) => {
-      const nextValue = partial[key];
-      const baseValue =
-        key in pending ? pending[key] : this.state[key];
-      if (Object.is(baseValue, nextValue)) return;
-      pending[key] = nextValue as never;
-      hasChanges = true;
-    });
-
-    if (!hasChanges) return;
-
-    this.pendingState = pending;
-    if (this.updateScheduled) return;
-
-    this.updateScheduled = true;
-    queueMicrotask(() => {
-      const nextPending = this.pendingState;
-      this.pendingState = null;
-      this.updateScheduled = false;
-      if (nextPending) {
-        this.setState(nextPending);
-      }
-    });
-  }
-
   reset(overrides: Partial<InternalSipState> = {}) {
     this.setState({ ...getInitialSipState(), ...overrides });
   }
 
   private emit(emitPublic: boolean) {
-    for (const fn of this.listeners) fn(this.state);
+    for (const fn of Array.from(this.listeners)) {
+      try {
+        fn(this.state);
+      } catch (error) {
+        console.error("[react-jssip-kit] state listener failed", error);
+      }
+    }
     if (emitPublic) {
-      for (const fn of this.publicListeners) fn(this.publicState);
+      for (const fn of Array.from(this.publicListeners)) {
+        try {
+          fn(this.publicState);
+        } catch (error) {
+          console.error(
+            "[react-jssip-kit] public state listener failed",
+            error
+          );
+        }
+      }
     }
   }
 }

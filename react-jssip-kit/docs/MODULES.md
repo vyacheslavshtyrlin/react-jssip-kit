@@ -467,8 +467,9 @@ Role:
 
 Internal projection path:
 
-1. UA handlers and session handlers call `batchSet`, `setState`,
-   `upsertSessionState`, `removeSessionState`, or `clearSessionsState`.
+1. UA handlers and session handlers update state synchronously through
+   `setState`, `upsertSessionState`, `removeSessionState`, or
+   `clearSessionsState`.
 2. Projector updates normalized maps and public list incrementally.
 3. Store exposes internal state to core modules and public state to consumers.
 

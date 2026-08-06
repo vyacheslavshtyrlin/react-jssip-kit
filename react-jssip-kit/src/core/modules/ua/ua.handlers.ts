@@ -23,33 +23,33 @@ export function createUAHandlers(deps: Deps): Partial<UAEventMap> {
 
   return {
     connecting: (e) => {
+      state.setState({ sipStatus: SipStatus.Connecting });
       emitter.emit("connecting", e);
-      state.batchSet({ sipStatus: SipStatus.Connecting });
     },
     connected: (e) => {
-      emitter.emit("connected", e);
-      state.batchSet({ sipStatus: SipStatus.Connected });
+      state.setState({ sipStatus: SipStatus.Connected });
       deps.onConnected();
+      emitter.emit("connected", e);
     },
     disconnected: (e) => {
       emitter.emit("disconnected", e);
       deps.onDisconnected();
     },
     registered: (e) => {
-      emitter.emit("registered", e);
-      state.batchSet({ sipStatus: SipStatus.Registered, error: null });
+      state.setState({ sipStatus: SipStatus.Registered, error: null });
       deps.onConnected();
+      emitter.emit("registered", e);
     },
     unregistered: (e) => {
+      state.setState({ sipStatus: SipStatus.Unregistered });
       emitter.emit("unregistered", e);
-      state.batchSet({ sipStatus: SipStatus.Unregistered });
     },
     registrationFailed: (e) => {
-      emitter.emit("registrationFailed", e);
-      state.batchSet({
+      state.setState({
         sipStatus: SipStatus.RegistrationFailed,
         error: e?.cause || "registration failed",
       });
+      emitter.emit("registrationFailed", e);
     },
     newRTCSession: deps.onNewRTCSession,
     newMessage: (e: IncomingMessageEvent | OutgoingMessageEvent) =>

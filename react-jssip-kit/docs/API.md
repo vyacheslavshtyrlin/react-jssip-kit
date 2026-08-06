@@ -219,15 +219,15 @@ Common JsSIP fields passed through in `SipConfiguration` include `sockets`,
 
 Wrapper-only fields:
 
-| Field                      | Behavior                                                                                           |
-| -------------------------- | -------------------------------------------------------------------------------------------------- |
-| `debug`                    | Enables JsSIP debug output; string values are used as debug namespace patterns.                    |
-| `enableMicRecovery`        | Starts mic sender/track monitoring after a session is confirmed.                                   |
-| `micRecoveryIntervalMs`    | Overrides the mic recovery polling interval.                                                       |
-| `micRecoveryMaxRetries`    | Overrides max mic recovery attempts.                                                               |
-| `maxSessionCount`          | Rejects new remote sessions with `486 Busy Here` after the limit is reached.                       |
-| `iceCandidateReadyDelayMs` | Delays JsSIP `icecandidate.ready()` until a server-reflexive candidate appears or a timer expires. |
-| `reconnect`                | Enables wrapper-level reconnect after unexpected UA disconnect.                                    |
+| Field                      | Behavior                                                                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `debug`                    | Enables JsSIP debug output; string values are used as debug namespace patterns.                                              |
+| `enableMicRecovery`        | Starts mic sender/track monitoring after a session is confirmed.                                                             |
+| `micRecoveryIntervalMs`    | Overrides the polling interval; must be a finite positive number.                                                            |
+| `micRecoveryMaxRetries`    | Overrides max recovery attempts; accepts a non-negative integer or `Infinity`.                                               |
+| `maxSessionCount`          | Limits simultaneous remote sessions; rejects excess ones with `486 Busy Here`. Accepts a non-negative integer or `Infinity`. |
+| `iceCandidateReadyDelayMs` | Delays JsSIP `icecandidate.ready()`; must be a finite non-negative number.                                                   |
+| `reconnect`                | Enables wrapper-level reconnect after unexpected UA disconnect.                                                              |
 
 ## Call and Session Options
 
@@ -251,11 +251,11 @@ For detailed behavior and examples, see [JsSIP Interop](./JSSIP_INTEROP.md).
 
 Important behavior implemented by `react-jssip-kit` on top of JsSIP:
 
-| Behavior            | Details                                                                                                                            |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Auto-hold           | On `newRTCSession`, `accepted`, and `unhold`, other `active` sessions are asked to hold before the current session becomes active. |
-| Max sessions        | `maxSessionCount` rejects only new remote sessions with SIP `486 Busy Here`; existing sessions stay untouched.                     |
-| Early media         | Outgoing `progress` with a remote SDP body sets status `earlyMedia`.                                                               |
-| Media stream timing | `call(..., { mediaStream })` stores stream before `ua.call()` because JsSIP can emit `newRTCSession` synchronously.                |
-| Reconnect           | Unexpected UA disconnect cleans sessions and enters `reconnecting` when wrapper reconnect is enabled.                              |
-| Cleanup             | `disconnect()` stops UA, detaches runtime listeners, removes session handlers, clears media recovery, and resets public state.     |
+| Behavior            | Details                                                                                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auto-hold           | On `newRTCSession`, `accepted`, and `unhold`, other `active` sessions are asked to hold before the current session becomes active.              |
+| Max sessions        | `maxSessionCount` limits only remote sessions and rejects excess new ones with SIP `486 Busy Here`; outgoing sessions do not consume the limit. |
+| Early media         | Outgoing `progress` with a remote SDP body sets status `earlyMedia`.                                                                            |
+| Media stream timing | `call(..., { mediaStream })` stores stream before `ua.call()` because JsSIP can emit `newRTCSession` synchronously.                             |
+| Reconnect           | Unexpected UA disconnect cleans sessions and enters `reconnecting` when wrapper reconnect is enabled.                                           |
+| Cleanup             | `disconnect()` stops UA, detaches runtime listeners, removes session handlers, clears media recovery, and resets public state.                  |

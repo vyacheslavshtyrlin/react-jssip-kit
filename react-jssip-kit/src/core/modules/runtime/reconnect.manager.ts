@@ -45,7 +45,13 @@ export class ReconnectManager {
 
     this.timer = setTimeout(() => {
       this.timer = null;
-      if (this._active) this.onAttempt();
+      if (!this._active) return;
+      try {
+        this.onAttempt();
+      } catch (error) {
+        console.error("[react-jssip-kit] reconnect attempt failed", error);
+        if (this._active) this.scheduleNext();
+      }
     }, delay);
   }
 

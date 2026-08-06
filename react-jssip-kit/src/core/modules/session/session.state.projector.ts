@@ -49,7 +49,9 @@ export function upsertSessionState(
       )
     : [...current.sessions, nextSession];
 
-  state.batchSet({ sessionsById, sessionIds, sessions });
+  // Session registration must be visible immediately: a second incoming INVITE
+  // can arrive before a queued UI update has been flushed.
+  state.setState({ sessionsById, sessionIds, sessions });
 }
 
 export function removeSessionState(state: StateAdapter, sessionId: string) {
