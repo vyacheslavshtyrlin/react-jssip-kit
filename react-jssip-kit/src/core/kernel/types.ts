@@ -7,6 +7,7 @@ import type {
   ExtraHeaders,
   MicDropPayload,
   SessionIceFailedPayload,
+  SessionIceRecoveryExhaustedPayload,
   RenegotiateOptions,
   ReferOptions,
   SendMessageOptions,
@@ -58,10 +59,7 @@ export interface SipKernel {
       target: string,
       options?: ReferOptions
     ) => boolean;
-    attendedTransfer: (
-      sessionId: string,
-      replaceSessionId: string
-    ) => boolean;
+    attendedTransfer: (sessionId: string, replaceSessionId: string) => boolean;
     sendInfo: (
       sessionId: string,
       contentType: string,
@@ -86,7 +84,12 @@ export interface SipKernel {
       handler: (payload?: SessionEventPayload<K>) => void
     ) => () => void;
     onMicDrop: (handler: (payload: MicDropPayload) => void) => () => void;
-    onSessionIceFailed: (handler: (payload: SessionIceFailedPayload) => void) => () => void;
+    onSessionIceFailed: (
+      handler: (payload: SessionIceFailedPayload) => void
+    ) => () => void;
+    onSessionIceRecoveryExhausted: (
+      handler: (payload: SessionIceRecoveryExhaustedPayload) => void
+    ) => () => void;
   };
   eventManager: SipEventManager;
   media: MediaModule;

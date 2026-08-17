@@ -52,6 +52,10 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
   private configDebug?: boolean | string;
   private maxSessionCount = Infinity;
   private iceCandidateReadyDelayMs?: number;
+  private autoIceRestart = false;
+  private autoIceRestartMaxAttempts = 1;
+  private autoIceRestartDisconnectedDelayMs = 7000;
+  private autoIceRestartRetryDelayMs = 250;
   private sessionManager = new SessionManager();
   private sessionModule: SessionModule;
   private micRecovery: MicRecoveryManager;
@@ -104,6 +108,11 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
       micRecovery: this.micRecovery,
       getMaxSessionCount: () => this.maxSessionCount,
       getIceCandidateReadyDelayMs: () => this.iceCandidateReadyDelayMs,
+      getAutoIceRestart: () => this.autoIceRestart,
+      getAutoIceRestartMaxAttempts: () => this.autoIceRestartMaxAttempts,
+      getAutoIceRestartDisconnectedDelayMs: () =>
+        this.autoIceRestartDisconnectedDelayMs,
+      getAutoIceRestartRetryDelayMs: () => this.autoIceRestartRetryDelayMs,
     });
 
     this.debugRuntime = new SipDebugRuntime({
@@ -126,6 +135,7 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
       micRecoveryMaxRetries,
       maxSessionCount,
       iceCandidateReadyDelayMs,
+      autoIceRestart,
       reconnect,
       ...uaCfg
     } = config;
@@ -135,6 +145,7 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
     const resolvedIceCandidateReadyDelayMs = this.resolveIceCandidateReadyDelay(
       iceCandidateReadyDelayMs
     );
+    const resolvedAutoIceRestart = this.resolveAutoIceRestart(autoIceRestart);
     const micRecoveryConfig = {
       enabled: Boolean(enableMicRecovery),
       intervalMs: micRecoveryIntervalMs,
@@ -160,6 +171,11 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
     this.reconnectConfig = resolvedReconnectConfig;
     this.maxSessionCount = resolvedMaxSessionCount;
     this.iceCandidateReadyDelayMs = resolvedIceCandidateReadyDelayMs;
+    this.autoIceRestart = resolvedAutoIceRestart.enabled;
+    this.autoIceRestartMaxAttempts = resolvedAutoIceRestart.maxAttempts;
+    this.autoIceRestartDisconnectedDelayMs =
+      resolvedAutoIceRestart.disconnectedDelayMs;
+    this.autoIceRestartRetryDelayMs = resolvedAutoIceRestart.retryDelayMs;
     this.micRecovery.configure(micRecoveryConfig);
     const debug = this.resolveDebug(cfgDebug);
     try {
@@ -241,6 +257,7 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
     delete uaCfg.micRecoveryMaxRetries;
     delete uaCfg.maxSessionCount;
     delete uaCfg.iceCandidateReadyDelayMs;
+    delete uaCfg.autoIceRestart;
     delete uaCfg.reconnect;
     this.configDebug = cfgDebug;
     this.stateStore.reset({ sipStatus: SipStatus.Connecting });
@@ -367,6 +384,31 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
     throw new RangeError(
       "iceCandidateReadyDelayMs must be a finite non-negative number"
     );
+  }
+
+  private resolveAutoIceRestart(value?: SipConfiguration["autoIceRestart"]) {
+    const config = value === true ? {} : value || {};
+    const maxAttempts = config.maxAttempts ?? 1;
+    const disconnectedDelayMs = config.disconnectedDelayMs ?? 7000;
+    const retryDelayMs = config.retryDelayMs ?? 250;
+    if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 0)
+      throw new RangeError(
+        "autoIceRestart.maxAttempts must be a non-negative integer"
+      );
+    if (!Number.isFinite(disconnectedDelayMs) || disconnectedDelayMs < 0)
+      throw new RangeError(
+        "autoIceRestart.disconnectedDelayMs must be finite and non-negative"
+      );
+    if (!Number.isFinite(retryDelayMs) || retryDelayMs < 0)
+      throw new RangeError(
+        "autoIceRestart.retryDelayMs must be finite and non-negative"
+      );
+    return {
+      enabled: Boolean(value),
+      maxAttempts,
+      disconnectedDelayMs,
+      retryDelayMs,
+    };
   }
 
   private resolveReconnectConfig(

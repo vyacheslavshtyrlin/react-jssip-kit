@@ -75,6 +75,11 @@ export class SipDebugLogger {
     console.info("[sip] ice ready config", { sessionId, delayMs });
   }
 
+  logIceRestart(sessionId: string, payload: Record<string, unknown>) {
+    if (!this.enabled) return;
+    console.info("[sip] ice restart", { sessionId, ...payload });
+  }
+
   startCallStatsLogging(sessionId: string, session: any) {
     if (!this.enabled || this.statsStops.has(sessionId)) return;
 

@@ -30,6 +30,10 @@ type SessionModuleDeps = {
   micRecovery: MicRecoveryManager;
   getMaxSessionCount: () => number;
   getIceCandidateReadyDelayMs: () => number | undefined;
+  getAutoIceRestart: () => boolean;
+  getAutoIceRestartMaxAttempts: () => number;
+  getAutoIceRestartDisconnectedDelayMs: () => number;
+  getAutoIceRestartRetryDelayMs: () => number;
 };
 
 export class SessionModule {
@@ -286,6 +290,13 @@ export class SessionModule {
           this.deps.sessionManager.getRtc(id)?.hold()
         ),
       iceCandidateReadyDelayMs: this.deps.getIceCandidateReadyDelayMs(),
+      autoIceRestart: this.deps.getAutoIceRestart(),
+      autoIceRestartMaxAttempts: this.deps.getAutoIceRestartMaxAttempts(),
+      autoIceRestartDisconnectedDelayMs:
+        this.deps.getAutoIceRestartDisconnectedDelayMs(),
+      autoIceRestartRetryDelayMs:
+        this.deps.getAutoIceRestartRetryDelayMs(),
+      restartIce: () => session.renegotiate({ iceRestart: true }),
       sessionId,
     });
   }

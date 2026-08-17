@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- Added: configurable automatic ICE recovery through `autoIceRestart`. `true` uses defaults; object form supports `maxAttempts` (default `1`), `disconnectedDelayMs` (default `7000`), and `retryDelayMs` (default `250`).
+- Added: `sessionIceRecoveryExhausted`, `kernel.events.onSessionIceRecoveryExhausted()`, `useSessionIceRecoveryExhausted()`, and its public payload type for consumer-controlled call termination after recovery is exhausted.
+- Added: `CallPlayer` retries remote audio playback after `track.unmute` and when the PeerConnection reaches `connected`.
+- Fixed: ICE recovery handles a temporary JsSIP re-INVITE rejection without consuming an actual restart attempt, cleans timers/listeners after PeerConnection replacement and session completion, and bounds readiness retries.
+- Fixed: wrapper-only ICE recovery configuration is excluded from JsSIP UA configuration during reconnect.
+- Added: Vitest regression coverage for ICE restart retry, transient `disconnected`, and watchdog cancellation after reconnection.
+
 ## 1.1.3
 
 - Fixed: `maxSessionCount` now limits only simultaneous incoming sessions; outgoing sessions do not consume the limit. Excess incoming INVITEs are rejected with SIP `486 Busy Here`.

@@ -13,6 +13,7 @@ export { useSipSessions } from "./hooks/useSipSessions";
 export { useSipEvent, useSipSessionEvent } from "./hooks/useSipEvent";
 export { useMicDrop } from "./hooks/useMicDrop";
 export { useSessionIceFailed } from "./hooks/useSessionIceFailed";
+export { useSessionIceRecoveryExhausted } from "./hooks/useSessionIceRecoveryExhausted";
 export { useSessionMedia } from "./hooks/useSessionMedia";
 export { useCallTimer } from "./hooks/useCallTimer";
 export { useCallQuality } from "./hooks/useCallQuality";
@@ -46,6 +47,7 @@ import type {
   ExtraHeaders,
   MicDropPayload,
   SessionIceFailedPayload,
+  SessionIceRecoveryExhaustedPayload,
   ReferOptions,
   RenegotiateOptions,
   SendMessageOptions,
@@ -77,6 +79,7 @@ export type {
   ExtraHeaders,
   MicDropPayload,
   SessionIceFailedPayload,
+  SessionIceRecoveryExhaustedPayload,
   ReferOptions,
   RenegotiateOptions,
   SendMessageOptions,

@@ -1,4 +1,9 @@
-import type { UAEventMap, UAConfiguration, RTCSessionEvent, CallOptions } from "jssip/lib/UA";
+﻿import type {
+  UAEventMap,
+  UAConfiguration,
+  RTCSessionEvent,
+  CallOptions,
+} from "jssip/lib/UA";
 import type {
   RTCSessionEventMap,
   RTCSession,
@@ -66,15 +71,32 @@ export type SessionIceFailedPayload = {
   sessionId: string;
 };
 
+export type SessionIceRecoveryExhaustedPayload = {
+  sessionId: string;
+  attempts: number;
+  maxAttempts: number;
+  source: "failed" | "disconnected";
+};
+
 export type JsSIPEventMap = {
   [K in JsSIPEventName]: JsSIPEventPayload<K>;
-} & { micDrop: MicDropPayload; sessionIceFailed: SessionIceFailedPayload };
+} & {
+  micDrop: MicDropPayload;
+  sessionIceFailed: SessionIceFailedPayload;
+  sessionIceRecoveryExhausted: SessionIceRecoveryExhaustedPayload;
+};
 
 export type SipCallOptions = CallOptions;
 export type SipSendMessageOptions = SendMessageOptions;
 export type SipSendOptionsOptions = ExtraHeaders & {
   contentType?: string;
   eventHandlers?: Partial<MessageEventMap>;
+};
+
+export type AutoIceRestartConfig = {
+  maxAttempts?: number;
+  disconnectedDelayMs?: number;
+  retryDelayMs?: number;
 };
 
 export type SipConfiguration = Omit<UAConfiguration, "password" | "uri"> & {
@@ -84,6 +106,8 @@ export type SipConfiguration = Omit<UAConfiguration, "password" | "uri"> & {
   micRecoveryMaxRetries?: number;
   maxSessionCount?: number;
   iceCandidateReadyDelayMs?: number;
+  /** `true` uses defaults; object form customizes ICE recovery. */
+  autoIceRestart?: boolean | AutoIceRestartConfig;
   reconnect?: {
     enabled: boolean;
     maxAttempts?: number;
@@ -91,7 +115,6 @@ export type SipConfiguration = Omit<UAConfiguration, "password" | "uri"> & {
     backoffMultiplier?: number;
   };
 };
-
 export type {
   RTCSession,
   RTCSessionEventMap,

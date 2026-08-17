@@ -53,23 +53,25 @@ Props:
 
 ## Hooks
 
-| Hook                                            | Returns                   | Use for                                               |
-| ----------------------------------------------- | ------------------------- | ----------------------------------------------------- |
-| `useSipKernel()`                                | `SipKernel`               | Direct access to commands, store, events, and media.  |
-| `useSipState()`                                 | `SipState`                | Full public SIP state.                                |
-| `useSipSelector(selector)`                      | selected value            | Minimal state subscriptions.                          |
-| `useSipActions()`                               | command facade            | Calls, registration, messages, media mutation, debug. |
-| `useSipSessions()`                              | `{ sessions }`            | Rendering all public sessions.                        |
-| `useSipSession(sessionId)`                      | `SipSessionState \| null` | Reading one session by id.                            |
-| `useActiveSipSession()`                         | `SipSessionState \| null` | Reading the first active call.                        |
-| `useSessionMedia(sessionId?)`                   | `SessionMediaState`       | Remote stream, audio tracks, peer connection.         |
-| `useSipEvent(event, handler)`                   | `void`                    | UA-level event subscriptions.                         |
-| `useSipSessionEvent(sessionId, event, handler)` | `void`                    | Session-level event subscriptions.                    |
-| `useMicDrop(handler)`                           | `void`                    | Microphone sender/track failure notifications.        |
-| `useSessionIceFailed(handler)`                  | `void`                    | ICE failure notification per session.                 |
-| `useCallTimer(sessionId?)`                      | `number`                  | Elapsed active-call seconds.                          |
-| `useCallQuality(sessionId?)`                    | `CallQuality \| null`     | WebRTC stats-derived quality snapshot.                |
-| `useSipMessages(filter?)`                       | `SipMessage[]`            | Inbound and outbound SIP MESSAGE history.             |
+| Hook                                            | Returns                      | Use for                                               |
+| ----------------------------------------------- | ---------------------------- | ----------------------------------------------------- |
+| `useSipKernel()`                                | `SipKernel`                  | Direct access to commands, store, events, and media.  |
+| `useSipState()`                                 | `SipState`                   | Full public SIP state.                                |
+| `useSipSelector(selector)`                      | selected value               | Minimal state subscriptions.                          |
+| `useSipActions()`                               | command facade               | Calls, registration, messages, media mutation, debug. |
+| `useSipSessions()`                              | `{ sessions }`               | Rendering all public sessions.                        |
+| `useSipSession(sessionId)`                      | `SipSessionState \| null`    | Reading one session by id.                            |
+| `useActiveSipSession()`                         | `SipSessionState \| null`    | Reading the first active call.                        |
+| `useSessionMedia(sessionId?)`                   | `SessionMediaState`          | Remote stream, audio tracks, peer connection.         |
+| `useSipEvent(event, handler)`                   | `void`                       | UA-level event subscriptions.                         |
+| `useSipSessionEvent(sessionId, event, handler)` | `void`                       | Session-level event subscriptions.                    |
+| `useMicDrop(handler)`                           | `void`                       | Microphone sender/track failure notifications.        |
+| `useSessionIceFailed(handler)`                  | `void`                       | ICE failure notification per session.                 |
+| `useSessionIceRecoveryExhausted(handler)`       | `void`                       | ICE recovery attempts are exhausted.                  |
+| `useCallTimer(sessionId?)`                      |
+| umber`                                          | Elapsed active-call seconds. |
+| `useCallQuality(sessionId?)`                    | `CallQuality \| null`        | WebRTC stats-derived quality snapshot.                |
+| `useSipMessages(filter?)`                       | `SipMessage[]`               | Inbound and outbound SIP MESSAGE history.             |
 
 ## Actions
 
@@ -161,6 +163,7 @@ kernel.events.onUA(event, handler);
 kernel.events.onSession(sessionId, event, handler);
 kernel.events.onMicDrop(handler);
 kernel.events.onSessionIceFailed(handler);
+kernel.events.onSessionIceRecoveryExhausted(handler);
 ```
 
 Each event subscription returns an unsubscribe function.
@@ -202,6 +205,13 @@ type SipConfiguration = Omit<UAConfiguration, "password" | "uri"> & {
   micRecoveryMaxRetries?: number;
   maxSessionCount?: number;
   iceCandidateReadyDelayMs?: number;
+  autoIceRestart?:
+    | boolean
+    | {
+        maxAttempts?: number;
+        disconnectedDelayMs?: number;
+        retryDelayMs?: number;
+      };
   reconnect?: {
     enabled: boolean;
     maxAttempts?: number;
@@ -214,20 +224,22 @@ type SipConfiguration = Omit<UAConfiguration, "password" | "uri"> & {
 Common JsSIP fields passed through in `SipConfiguration` include `sockets`,
 `display_name`, `authorization_user`, `authorization_jwt`, `extra_headers`,
 `register`, `register_expires`, `registrar_server`, `session_timers`,
-`session_timers_refresh_method`, `no_answer_timeout`, `contact_uri`,
+`session_timers_refresh_method`,
+o_answer_timeout`, `contact_uri`,
 `use_preloaded_route`, and `user_agent`.
 
 Wrapper-only fields:
 
-| Field                      | Behavior                                                                                                                     |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `debug`                    | Enables JsSIP debug output; string values are used as debug namespace patterns.                                              |
-| `enableMicRecovery`        | Starts mic sender/track monitoring after a session is confirmed.                                                             |
-| `micRecoveryIntervalMs`    | Overrides the polling interval; must be a finite positive number.                                                            |
-| `micRecoveryMaxRetries`    | Overrides max recovery attempts; accepts a non-negative integer or `Infinity`.                                               |
-| `maxSessionCount`          | Limits simultaneous remote sessions; rejects excess ones with `486 Busy Here`. Accepts a non-negative integer or `Infinity`. |
-| `iceCandidateReadyDelayMs` | Delays JsSIP `icecandidate.ready()`; must be a finite non-negative number.                                                   |
-| `reconnect`                | Enables wrapper-level reconnect after unexpected UA disconnect.                                                              |
+| Field                      | Behavior                                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `debug`                    | Enables JsSIP debug output; string values are used as debug namespace patterns.                                                 |
+| `enableMicRecovery`        | Starts mic sender/track monitoring after a session is confirmed.                                                                |
+| `micRecoveryIntervalMs`    | Overrides the polling interval; must be a finite positive number.                                                               |
+| `micRecoveryMaxRetries`    | Overrides max recovery attempts; accepts a non-negative integer or `Infinity`.                                                  |
+| `maxSessionCount`          | Limits simultaneous remote sessions; rejects excess ones with `486 Busy Here`. Accepts a non-negative integer or `Infinity`.    |
+| `iceCandidateReadyDelayMs` | Delays JsSIP `icecandidate.ready()`; must be a finite non-negative number.                                                      |
+| `autoIceRestart`           | `true` uses defaults; object form configures `maxAttempts` (default 1), `disconnectedDelayMs` (7000), and `retryDelayMs` (250). |
+| `reconnect`                | Enables wrapper-level reconnect after unexpected UA disconnect.                                                                 |
 
 ## Call and Session Options
 
@@ -251,11 +263,13 @@ For detailed behavior and examples, see [JsSIP Interop](./JSSIP_INTEROP.md).
 
 Important behavior implemented by `react-jssip-kit` on top of JsSIP:
 
-| Behavior            | Details                                                                                                                                         |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auto-hold           | On `newRTCSession`, `accepted`, and `unhold`, other `active` sessions are asked to hold before the current session becomes active.              |
-| Max sessions        | `maxSessionCount` limits only remote sessions and rejects excess new ones with SIP `486 Busy Here`; outgoing sessions do not consume the limit. |
-| Early media         | Outgoing `progress` with a remote SDP body sets status `earlyMedia`.                                                                            |
-| Media stream timing | `call(..., { mediaStream })` stores stream before `ua.call()` because JsSIP can emit `newRTCSession` synchronously.                             |
-| Reconnect           | Unexpected UA disconnect cleans sessions and enters `reconnecting` when wrapper reconnect is enabled.                                           |
-| Cleanup             | `disconnect()` stops UA, detaches runtime listeners, removes session handlers, clears media recovery, and resets public state.                  |
+| Behavior                                                                                                                      | Details                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auto-hold                                                                                                                     | On                                                                                                                                              |
+| ewRTCSession`, `accepted`, and `unhold`, other `active` sessions are asked to hold before the current session becomes active. |
+| Max sessions                                                                                                                  | `maxSessionCount` limits only remote sessions and rejects excess new ones with SIP `486 Busy Here`; outgoing sessions do not consume the limit. |
+| Early media                                                                                                                   | Outgoing `progress` with a remote SDP body sets status `earlyMedia`.                                                                            |
+| Media stream timing                                                                                                           | `call(..., { mediaStream })` stores stream before `ua.call()` because JsSIP can emit                                                            |
+| ewRTCSession` synchronously.                                                                                                  |
+| Reconnect                                                                                                                     | Unexpected UA disconnect cleans sessions and enters `reconnecting` when wrapper reconnect is enabled.                                           |
+| Cleanup                                                                                                                       | `disconnect()` stops UA, detaches runtime listeners, removes session handlers, clears media recovery, and resets public state.                  |

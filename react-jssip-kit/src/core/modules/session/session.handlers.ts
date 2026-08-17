@@ -25,6 +25,11 @@ type Deps = {
   enableMicrophoneRecovery?: (sessionId: string) => void;
   holdOtherActiveSessions?: () => void;
   iceCandidateReadyDelayMs?: number;
+  autoIceRestart: boolean;
+  autoIceRestartMaxAttempts: number;
+  autoIceRestartDisconnectedDelayMs: number;
+  autoIceRestartRetryDelayMs: number;
+  restartIce: () => boolean;
   sessionId: string;
 };
 
@@ -36,12 +41,25 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
     sessionId,
     iceCandidateReadyDelayMs,
     holdOtherActiveSessions,
+    autoIceRestart,
+    autoIceRestartMaxAttempts,
+    autoIceRestartDisconnectedDelayMs,
+    autoIceRestartRetryDelayMs,
+    restartIce,
   } = deps;
   let iceReadyCalled = false;
   let iceReadyTimer: ReturnType<typeof setTimeout> | null = null;
   let sessionEnded = false;
   let iceFailedEmitted = false;
   let removeIceFailedListener: (() => void) | null = null;
+  let iceDisconnectedTimer: ReturnType<typeof setTimeout> | null = null;
+  let iceRestartRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  let iceRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  let iceRestartAttempts = 0;
+  let iceRestartRetryAttempts = 0;
+  let iceRecoveryExhaustedEmitted = false;
+  const maxIceRestartRetryAttempts = 40;
+  const iceRecoveryTimeoutMs = 10_000;
 
   const clearIceReadyTimer = () => {
     if (!iceReadyTimer) return;
@@ -52,9 +70,89 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
     removeIceFailedListener?.();
     removeIceFailedListener = null;
   };
+  const clearIceDisconnectedTimer = () => {
+    if (!iceDisconnectedTimer) return;
+    clearTimeout(iceDisconnectedTimer);
+    iceDisconnectedTimer = null;
+  };
+  const clearIceRestartRetryTimer = () => {
+    if (!iceRestartRetryTimer) return;
+    clearTimeout(iceRestartRetryTimer);
+    iceRestartRetryTimer = null;
+  };
+  const clearIceRecoveryTimer = () => {
+    if (!iceRecoveryTimer) return;
+    clearTimeout(iceRecoveryTimer);
+    iceRecoveryTimer = null;
+  };
+  const emitIceRecoveryExhausted = (source: "failed" | "disconnected") => {
+    if (iceRecoveryExhaustedEmitted) return;
+    iceRecoveryExhaustedEmitted = true;
+    emitter.emit("sessionIceRecoveryExhausted", {
+      sessionId,
+      attempts: iceRestartAttempts,
+      maxAttempts: autoIceRestartMaxAttempts,
+      source,
+    });
+  };
+  const scheduleIceRestartRetry = (
+    source: "failed" | "disconnected",
+    pc: RTCPeerConnection
+  ) => {
+    if (sessionEnded || iceRestartRetryTimer) return;
+    if (iceRestartRetryAttempts >= maxIceRestartRetryAttempts) {
+      emitIceRecoveryExhausted(source);
+      return;
+    }
+    iceRestartRetryAttempts += 1;
+    iceRestartRetryTimer = setTimeout(() => {
+      iceRestartRetryTimer = null;
+      const stillBroken =
+        pc.iceConnectionState === "failed" ||
+        pc.iceConnectionState === "disconnected";
+      if (stillBroken) restartIceOnce(source, pc);
+    }, autoIceRestartRetryDelayMs);
+  };
+  const restartIceOnce = (
+    source: "failed" | "disconnected",
+    pc: RTCPeerConnection
+  ) => {
+    if (!autoIceRestart || sessionEnded || autoIceRestartMaxAttempts === 0)
+      return;
+    if (iceRestartAttempts >= autoIceRestartMaxAttempts) {
+      emitIceRecoveryExhausted(source);
+      return;
+    }
+    clearIceDisconnectedTimer();
+    clearIceRestartRetryTimer();
+    let accepted = false;
+    try {
+      accepted = restartIce();
+    } catch {
+      accepted = false;
+    }
+    if (accepted) {
+      iceRestartAttempts += 1;
+      iceRestartRetryAttempts = 0;
+      clearIceRecoveryTimer();
+      iceRecoveryTimer = setTimeout(() => {
+        iceRecoveryTimer = null;
+        const stillBroken =
+          pc.iceConnectionState === "failed" ||
+          pc.iceConnectionState === "disconnected";
+        if (stillBroken) restartIceOnce(source, pc);
+      }, iceRecoveryTimeoutMs);
+    } else {
+      scheduleIceRestartRetry(source, pc);
+    }
+    sipDebugLogger.logIceRestart(sessionId, { source, accepted });
+  };
   const finishSession = () => {
     sessionEnded = true;
     clearIceReadyTimer();
+    clearIceDisconnectedTimer();
+    clearIceRestartRetryTimer();
+    clearIceRecoveryTimer();
     cleanupIceFailedListener();
     cleanupSession();
   };
@@ -205,9 +303,40 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
       const pc = (e as { peerconnection?: RTCPeerConnection }).peerconnection;
       if (!pc) return;
       cleanupIceFailedListener();
+      clearIceDisconnectedTimer();
+      clearIceRestartRetryTimer();
+      clearIceRecoveryTimer();
       const onIceStateChange = () => {
-        if (sessionEnded || iceFailedEmitted) return;
-        if (pc.iceConnectionState === "failed") {
+        if (sessionEnded) return;
+        const iceState = pc.iceConnectionState;
+        if (
+          iceState === "connected" ||
+          iceState === "completed" ||
+          iceState === "closed"
+        ) {
+          clearIceDisconnectedTimer();
+          clearIceRestartRetryTimer();
+          clearIceRecoveryTimer();
+          return;
+        }
+        if (
+          autoIceRestart &&
+          iceState === "disconnected" &&
+          !iceDisconnectedTimer
+        ) {
+          iceDisconnectedTimer = setTimeout(() => {
+            iceDisconnectedTimer = null;
+            if (pc.iceConnectionState === "disconnected") {
+              restartIceOnce("disconnected", pc);
+            }
+          }, autoIceRestartDisconnectedDelayMs);
+          return;
+        }
+        if (iceState === "failed") {
+          clearIceDisconnectedTimer();
+          restartIceOnce("failed", pc);
+        }
+        if (!iceFailedEmitted && iceState === "failed") {
           iceFailedEmitted = true;
           emitter.emit("sessionIceFailed", { sessionId });
         }
