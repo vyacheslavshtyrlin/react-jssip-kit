@@ -5,7 +5,7 @@ Typed React hooks and a provider for building SIP/WebRTC calling UI on top of
 
 [![npm version](https://img.shields.io/npm/v/react-jssip-kit.svg)](https://www.npmjs.com/package/react-jssip-kit)
 [![npm downloads](https://img.shields.io/npm/dm/react-jssip-kit.svg)](https://www.npmjs.com/package/react-jssip-kit)
-[![license](https://img.shields.io/npm/l/react-jssip-kit.svg)](./LICENSE)
+[![license](https://img.shields.io/npm/l/react-jssip-kit.svg)](https://github.com/vyacheslavshtyrlin/react-jssip-kit/blob/main/react-jssip-kit/LICENSE)
 [![React](https://img.shields.io/badge/react-18%20%7C%2019-149eca.svg)](https://react.dev/)
 
 `react-jssip-kit` gives React applications a small composition layer around
@@ -119,12 +119,12 @@ export function App() {
 
 | Guide                                        | What it covers                                                                       |
 | -------------------------------------------- | ------------------------------------------------------------------------------------ |
-| [Getting Started](./docs/GETTING_STARTED.md) | Installation, provider setup, connection lifecycle, and first call controls.         |
-| [API Reference](./docs/API.md)               | Public exports, hooks, kernel commands, state, events, and types.                    |
-| [JsSIP Interop](./docs/JSSIP_INTEROP.md)     | Official JsSIP links, events, configs, call options, and runtime behavior.           |
-| [Recipes](./docs/RECIPES.md)                 | Incoming calls, remote audio, messages, call quality, mic recovery, and ICE restart. |
-| [Modules and Lifecycle](./docs/MODULES.md)   | Internal architecture for maintainers and advanced integrators.                      |
-| [Changelog](./CHANGELOG.md)                  | Release notes and migration notes.                                                   |
+| [Getting Started](https://github.com/vyacheslavshtyrlin/react-jssip-kit/blob/main/react-jssip-kit/docs/GETTING_STARTED.md) | Installation, provider setup, connection lifecycle, and first call controls.         |
+| [API Reference](https://github.com/vyacheslavshtyrlin/react-jssip-kit/blob/main/react-jssip-kit/docs/API.md)               | Public exports, hooks, kernel commands, state, events, and types.                    |
+| [JsSIP Interop](https://github.com/vyacheslavshtyrlin/react-jssip-kit/blob/main/react-jssip-kit/docs/JSSIP_INTEROP.md)     | Official JsSIP links, events, configs, call options, and runtime behavior.           |
+| [Recipes](https://github.com/vyacheslavshtyrlin/react-jssip-kit/blob/main/react-jssip-kit/docs/RECIPES.md)                 | Incoming calls, remote audio, messages, call quality, mic recovery, and ICE restart. |
+| [Modules and Lifecycle](https://github.com/vyacheslavshtyrlin/react-jssip-kit/blob/main/react-jssip-kit/docs/MODULES.md)   | Internal architecture for maintainers and advanced integrators.                      |
+| [Changelog](https://github.com/vyacheslavshtyrlin/react-jssip-kit/blob/main/react-jssip-kit/CHANGELOG.md)                  | Release notes and migration notes.                                                   |
 
 ## Core Concepts
 

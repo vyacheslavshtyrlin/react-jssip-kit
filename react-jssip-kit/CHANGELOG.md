@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.3
+
+- Fixed: documentation, changelog, and license links in the npm README now use the correct GitHub monorepo paths.
+
 ## 1.2.2
 
 - Fixed: updated repository, issues, and homepage links after the GitHub repository was renamed to `react-jssip-kit`.
