@@ -82,3 +82,46 @@ describe("createSessionHandlers auto ICE restart", () => {
     expect(restartIce).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("createSessionHandlers terminal session events", () => {
+  it("cleans up the affected session after setRemoteDescription failure", () => {
+    const cleanupSession = vi.fn();
+    const handlers = createSessionHandlers({
+      emitter: { emit: vi.fn() } as never,
+      state: { getState: () => ({ sessionsById: {} }), setState: vi.fn() } as never,
+      cleanupSession,
+      autoIceRestart: false,
+      autoIceRestartMaxAttempts: 0,
+      autoIceRestartDisconnectedDelayMs: 0,
+      autoIceRestartRetryDelayMs: 0,
+      restartIce: () => false,
+      sessionId: "session-1",
+    });
+
+    handlers["peerconnection:setremotedescriptionfailed"]?.(new Error("SDP"));
+
+    expect(cleanupSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("includes the session id in the global failed payload", () => {
+    const emitter = { emit: vi.fn() };
+    const handlers = createSessionHandlers({
+      emitter: emitter as never,
+      state: { getState: () => ({ sessionsById: {} }), setState: vi.fn() } as never,
+      cleanupSession: vi.fn(),
+      autoIceRestart: false,
+      autoIceRestartMaxAttempts: 0,
+      autoIceRestartDisconnectedDelayMs: 0,
+      autoIceRestartRetryDelayMs: 0,
+      restartIce: () => false,
+      sessionId: "session-1",
+    });
+
+    (handlers.failed as (event: { cause: string }) => void)({ cause: "Busy" });
+
+    expect(emitter.emit).toHaveBeenCalledWith("failed", {
+      cause: "Busy",
+      sessionId: "session-1",
+    });
+  });
+});

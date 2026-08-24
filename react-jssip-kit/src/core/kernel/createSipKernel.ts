@@ -85,6 +85,10 @@ export function createSipKernel(): SipKernel {
       onSessionIceFailed: (handler) => client.on("sessionIceFailed", handler),
       onSessionIceRecoveryExhausted: (handler) =>
         client.on("sessionIceRecoveryExhausted", handler),
+      onSessionIceRecoveryStarted: (handler) =>
+        client.on("sessionIceRecoveryStarted", handler),
+      onSessionIceRecoverySucceeded: (handler) =>
+        client.on("sessionIceRecoverySucceeded", handler),
     },
     eventManager,
     media,

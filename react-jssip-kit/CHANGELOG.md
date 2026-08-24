@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.1
+
+- Fixed: an incoming INVITE is rejected with `486 Busy Here` before it can put an existing live session on hold when `maxSessionCount` is reached. Only attached `RTCSession` instances count toward the limit; pending media does not. Outgoing call initiation remains consumer-controlled.
+- Fixed: global `failed` payloads include a stable `sessionId`, including rejected over-limit INVITEs, while preserving the native JsSIP event object when extensible. Added the public `SessionFailedPayload` type export.
+- Fixed: unexpected SIP transport disconnects clear local session state before reconnect, matching JsSIP `UA.stop()` which terminates every RTCSession and preventing stale dialogs after reconnect.
+- Fixed: all terminal WebRTC/session failures now clear only their affected session; `peerconnection:setremotedescriptionfailed` retains its diagnostic message in `sipState.error`.
+- Added: internal `console.error` diagnostics for SIP registration, transport/reconnect, terminal session/WebRTC, and ICE recovery failures.
+- Fixed: session event listener cleanup supports both `off` and `removeListener` EventEmitter APIs.
+
 ## 1.2.0
 
 - Added: configurable automatic ICE recovery through `autoIceRestart`. `true` uses defaults; object form supports `maxAttempts` (default `1`), `disconnectedDelayMs` (default `7000`), and `retryDelayMs` (default `250`).

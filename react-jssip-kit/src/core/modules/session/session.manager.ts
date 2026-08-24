@@ -110,6 +110,14 @@ export class SessionManager {
     return Array.from(this.entries.keys());
   }
 
+  getLiveSessionCount() {
+    let count = 0;
+    for (const entry of this.entries.values()) {
+      if (entry.session) count += 1;
+    }
+    return count;
+  }
+
   getSessions() {
     return Array.from(this.entries.entries()).map(([id, entry]) => ({
       id,

@@ -21,6 +21,7 @@ export type { CallQuality } from "./hooks/useCallQuality";
 export { useSipMessages } from "./hooks/useSipMessages";
 export type { SipMessage } from "./hooks/useSipMessages";
 export { CallPlayer } from "./components/call-player";
+export { getWebRTCCapabilities } from "./core/browser/capabilities";
 
 export { SipProvider } from "./provider";
 export type { SipProviderProps } from "./provider";
@@ -47,6 +48,7 @@ import type {
   ExtraHeaders,
   MicDropPayload,
   SessionIceFailedPayload,
+  SessionFailedPayload,
   SessionIceRecoveryExhaustedPayload,
   ReferOptions,
   RenegotiateOptions,
@@ -79,6 +81,7 @@ export type {
   ExtraHeaders,
   MicDropPayload,
   SessionIceFailedPayload,
+  SessionFailedPayload,
   SessionIceRecoveryExhaustedPayload,
   ReferOptions,
   RenegotiateOptions,

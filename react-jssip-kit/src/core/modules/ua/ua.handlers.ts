@@ -1,3 +1,4 @@
+import { logSipError } from "../debug/sip-error.logger";
 import type { UAEventMap } from "../../sip/types";
 import { SipStatus } from "../../contracts/state";
 import type { StateAdapter } from "../../contracts/state";
@@ -45,6 +46,7 @@ export function createUAHandlers(deps: Deps): Partial<UAEventMap> {
       emitter.emit("unregistered", e);
     },
     registrationFailed: (e) => {
+      logSipError("SIP registration failed", { event: e });
       state.setState({
         sipStatus: SipStatus.RegistrationFailed,
         error: e?.cause || "registration failed",

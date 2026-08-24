@@ -236,7 +236,7 @@ Wrapper-only fields:
 | `enableMicRecovery`        | Starts mic sender/track monitoring after a session is confirmed.                                                                |
 | `micRecoveryIntervalMs`    | Overrides the polling interval; must be a finite positive number.                                                               |
 | `micRecoveryMaxRetries`    | Overrides max recovery attempts; accepts a non-negative integer or `Infinity`.                                                  |
-| `maxSessionCount`          | Limits simultaneous remote sessions; rejects excess ones with `486 Busy Here`. Accepts a non-negative integer or `Infinity`.    |
+| `maxSessionCount`          | Rejects a new incoming INVITE when the live-session limit is reached; does not restrict outgoing call initiation. Accepts a non-negative integer or `Infinity`.    |
 | `iceCandidateReadyDelayMs` | Delays JsSIP `icecandidate.ready()`; must be a finite non-negative number.                                                      |
 | `autoIceRestart`           | `true` uses defaults; object form configures `maxAttempts` (default 1), `disconnectedDelayMs` (7000), and `retryDelayMs` (250). |
 | `reconnect`                | Enables wrapper-level reconnect after unexpected UA disconnect.                                                                 |

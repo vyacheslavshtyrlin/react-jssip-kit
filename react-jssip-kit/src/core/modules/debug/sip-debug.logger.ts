@@ -1,3 +1,4 @@
+import { detachSessionListener } from "../../sip/session-listeners";
 type PcSnapshot = {
   connectionState?: RTCPeerConnectionState;
   signalingState?: RTCSignalingState;
@@ -114,7 +115,7 @@ export class SipDebugLogger {
 
     const stop = () => {
       clearInterval(timer);
-      session.off?.("peerconnection", onPeer);
+      detachSessionListener(session, "peerconnection", onPeer);
       this.statsStops.delete(sessionId);
     };
     this.statsStops.set(sessionId, stop);

@@ -1,3 +1,4 @@
+import { detachSessionListener } from "../../sip/session-listeners";
 import type { RTCSession } from "../../sip/types";
 
 export type AudioBindOpts = {
@@ -74,7 +75,7 @@ export function createAudioBindRetry(opts: AudioBindOpts): () => void {
     } as const;
     attachedSessionEvents.forEach((event) => {
       try {
-        session.off?.(event, sessionHandlers[event]);
+        detachSessionListener(session, event, sessionHandlers[event]);
       } catch (error) {
         console.error(
           "[react-jssip-kit] audio bind listener detach failed",
@@ -179,7 +180,7 @@ export function createAudioBindRetry(opts: AudioBindOpts): () => void {
     }[K]
   ) => {
     attachedSessionEvents.add(event);
-    session.on?.(event, handler);
+    (session.on as ((event: string, listener: unknown) => void) | undefined)?.(event, handler);
   };
 
   const existingPc =

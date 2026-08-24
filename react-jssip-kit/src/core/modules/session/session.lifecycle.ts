@@ -1,3 +1,5 @@
+import { withSessionId } from "../../sip/session-event-payload";
+import { detachSessionListener } from "../../sip/session-listeners";
 import type { StateAdapter } from "../../contracts/state";
 import { CallStatus } from "../../contracts/state";
 import type { SessionManager } from "./session.manager";
@@ -60,7 +62,7 @@ export class SessionLifecycle {
     );
 
     if (e.originator === "remote" && !this.reserveIncomingSession(sessionId)) {
-      this.rejectSession(session, 486, "Busy Here", true);
+      this.rejectSession(session, 486, "Busy Here", true, sessionId);
       return;
     }
 
@@ -120,7 +122,8 @@ export class SessionLifecycle {
 
   private reserveIncomingSession(sessionId: string) {
     if (this.incomingSessionIds.has(sessionId)) return true;
-    if (this.incomingSessionIds.size >= this.getMaxSessionCount()) return false;
+    if (this.sessionManager.getLiveSessionCount() >= this.getMaxSessionCount())
+      return false;
     this.incomingSessionIds.add(sessionId);
     return true;
   }
@@ -129,19 +132,20 @@ export class SessionLifecycle {
     session: RTCSession,
     statusCode: number,
     reasonPhrase: string,
-    forwardFailed = false
+    forwardFailed = false,
+    sessionId = String(session.id)
   ) {
     let cleanupFailedListener: (() => void) | undefined;
     if (forwardFailed) {
       const onFailed: RTCSessionEventMap["failed"] = (failedEvent) => {
         cleanupFailedListener?.();
-        this.emit("failed", failedEvent);
+        this.emit("failed", withSessionId(failedEvent, sessionId));
       };
 
       cleanupFailedListener = () => {
         cleanupFailedListener = undefined;
         try {
-          session.off("failed", onFailed);
+          detachSessionListener(session, "failed", onFailed);
         } catch (error) {
           console.error(
             "[react-jssip-kit] failed listener detach failed",
@@ -331,7 +335,7 @@ export class SessionLifecycle {
       ] as const;
       listeners.forEach(([event, handler]) => {
         try {
-          session.off?.(event, handler);
+          detachSessionListener(session, event, handler);
         } catch (error) {
           console.error(
             "[react-jssip-kit] call stats listener detach failed",

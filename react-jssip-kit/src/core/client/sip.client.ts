@@ -1,4 +1,5 @@
-﻿import { SipUserAgent } from "../sip/user-agent";
+import { logSipError } from "../modules/debug/sip-error.logger";
+import { SipUserAgent } from "../sip/user-agent";
 import type {
   AnswerOptions,
   CallOptions,
@@ -158,7 +159,7 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
     this.reconnectManager?.cancel();
     this.reconnectManager = null;
     this._stopUA();
-    this.stateStore.reset({ sipStatus: SipStatus.Connecting });
+    this.stateStore.setState({ sipStatus: SipStatus.Connecting });
     this.lastConnectParams = {
       uri,
       password,
@@ -212,14 +213,14 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
   }
 
   private _onUADisconnected() {
-    this.cleanupAllSessions();
-
     if (this.intentionalDisconnect) return;
 
+    // JsSIP starts reconnect with UA.stop(), which terminates every RTCSession.
+    // Clear local session state before that restart so stale dialogs cannot remain.
+    this.cleanupAllSessions();
+    logSipError("SIP transport disconnected");
     if (this.reconnectConfig?.enabled) {
-      this.stateStore.reset({
-        sipStatus: SipStatus.Reconnecting,
-      });
+      this.stateStore.setState({ sipStatus: SipStatus.Reconnecting });
 
       if (!this.reconnectManager) {
         this.reconnectManager = new ReconnectManager(
@@ -232,7 +233,9 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
         this.reconnectManager.scheduleNext();
       }
     } else {
-      this.stateStore.reset();
+      // A transport disconnect does not necessarily terminate WebRTC dialogs.
+      // Preserve call state until a terminal session event or explicit disconnect.
+      this.stateStore.setState({ sipStatus: SipStatus.Disconnected });
     }
   }
 
@@ -260,7 +263,7 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
     delete uaCfg.autoIceRestart;
     delete uaCfg.reconnect;
     this.configDebug = cfgDebug;
-    this.stateStore.reset({ sipStatus: SipStatus.Connecting });
+    this.stateStore.setState({ sipStatus: SipStatus.Connecting });
     const debug = this.resolveDebug(cfgDebug);
     const nextUa = this.uaModule.prepareStart(uri, password, uaCfg);
     this.uaModule.startPrepared(nextUa, debug);
@@ -271,7 +274,9 @@ export class SipClient extends JssipEventEmitter<JsSIPEventMap> {
   }
 
   private _onReconnectExhausted() {
+    logSipError("SIP reconnect attempts exhausted");
     this.reconnectManager = null;
+    this.cleanupAllSessions();
     this.stateStore.reset();
   }
 

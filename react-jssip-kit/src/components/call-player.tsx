@@ -1,7 +1,12 @@
 import { useEffect, useRef } from "react";
 import { useSessionMedia } from "../hooks/useSessionMedia";
 
-export function CallPlayer({ sessionId }: { sessionId?: string }) {
+export type CallPlayerProps = {
+  sessionId?: string;
+  onPlaybackBlocked?: (error: unknown) => void;
+};
+
+export function CallPlayer({ sessionId, onPlaybackBlocked }: CallPlayerProps) {
   const { peerConnection, remoteStream } = useSessionMedia(sessionId);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playInFlightRef = useRef<Promise<void> | null>(null);
@@ -15,7 +20,7 @@ export function CallPlayer({ sessionId }: { sessionId?: string }) {
       const result = audioEl.play?.();
       if (!result) return;
       playInFlightRef.current = result
-        .catch(() => {})
+        .catch(onPlaybackBlocked)
         .finally(() => {
           playInFlightRef.current = null;
         });
@@ -40,7 +45,7 @@ export function CallPlayer({ sessionId }: { sessionId?: string }) {
       );
       audioEl.srcObject = null;
     };
-  }, [peerConnection, remoteStream]);
+  }, [onPlaybackBlocked, peerConnection, remoteStream]);
 
   return <audio ref={audioRef} autoPlay playsInline />;
 }

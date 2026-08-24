@@ -1,4 +1,5 @@
-﻿import type { SipClient } from "../../client";
+import { detachSessionListener } from "../../sip/session-listeners";
+import type { SipClient } from "../../client";
 import type {
   RTCSession,
   RTCSessionEventMap,
@@ -35,7 +36,7 @@ export function createSipEventManager(client: SipClient): SipEventManager {
         attachedSession = null;
         if (!session) return;
         try {
-          session.off(event, wrapped);
+          detachSessionListener(session, event, wrapped);
         } catch (error) {
           console.error(
             "[react-jssip-kit] session event listener detach failed",

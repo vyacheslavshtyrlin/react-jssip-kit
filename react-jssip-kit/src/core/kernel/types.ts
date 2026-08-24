@@ -8,6 +8,8 @@ import type {
   MicDropPayload,
   SessionIceFailedPayload,
   SessionIceRecoveryExhaustedPayload,
+  SessionIceRecoveryStartedPayload,
+  SessionIceRecoverySucceededPayload,
   RenegotiateOptions,
   ReferOptions,
   SendMessageOptions,
@@ -89,6 +91,12 @@ export interface SipKernel {
     ) => () => void;
     onSessionIceRecoveryExhausted: (
       handler: (payload: SessionIceRecoveryExhaustedPayload) => void
+    ) => () => void;
+    onSessionIceRecoveryStarted: (
+      handler: (payload: SessionIceRecoveryStartedPayload) => void
+    ) => () => void;
+    onSessionIceRecoverySucceeded: (
+      handler: (payload: SessionIceRecoverySucceededPayload) => void
     ) => () => void;
   };
   eventManager: SipEventManager;

@@ -1,4 +1,6 @@
-﻿import type { RTCSessionEventMap } from "../../sip/types";
+import { logSipError } from "../debug/sip-error.logger";
+import { withSessionId } from "../../sip/session-event-payload";
+import type { RTCSessionEventMap } from "../../sip/types";
 import { CallStatus } from "../../contracts/state";
 import type { StateAdapter } from "../../contracts/state";
 import type { JsSIPEventMap } from "../../sip/types";
@@ -58,6 +60,7 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
   let iceRestartAttempts = 0;
   let iceRestartRetryAttempts = 0;
   let iceRecoveryExhaustedEmitted = false;
+  let iceRecoveryAttempt: number | null = null;
   const maxIceRestartRetryAttempts = 40;
   const iceRecoveryTimeoutMs = 10_000;
 
@@ -88,6 +91,7 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
   const emitIceRecoveryExhausted = (source: "failed" | "disconnected") => {
     if (iceRecoveryExhaustedEmitted) return;
     iceRecoveryExhaustedEmitted = true;
+    logSipError("session ICE recovery exhausted", { sessionId, source, attempts: iceRestartAttempts, maxAttempts: autoIceRestartMaxAttempts });
     emitter.emit("sessionIceRecoveryExhausted", {
       sessionId,
       attempts: iceRestartAttempts,
@@ -133,6 +137,12 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
     }
     if (accepted) {
       iceRestartAttempts += 1;
+      iceRecoveryAttempt = iceRestartAttempts;
+      emitter.emit("sessionIceRecoveryStarted", {
+        sessionId,
+        source,
+        attempt: iceRecoveryAttempt,
+      });
       iceRestartRetryAttempts = 0;
       clearIceRecoveryTimer();
       iceRecoveryTimer = setTimeout(() => {
@@ -148,6 +158,7 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
     sipDebugLogger.logIceRestart(sessionId, { source, accepted });
   };
   const finishSession = () => {
+    if (sessionEnded) return;
     sessionEnded = true;
     clearIceReadyTimer();
     clearIceDisconnectedTimer();
@@ -197,7 +208,8 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
       finishSession();
     },
     failed: (e) => {
-      emitter.emit("failed", e);
+      logSipError("session failed", { sessionId, event: e });
+      emitter.emit("failed", withSessionId(e, sessionId));
       finishSession();
     },
 
@@ -279,23 +291,29 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
       emitter.emit("newInfo", e),
 
     getusermediafailed: (e) => {
+      logSipError("session getUserMedia failed", { sessionId, event: e });
       emitter.emit("getusermediafailed", e);
       finishSession();
     },
     "peerconnection:createofferfailed": (e) => {
+      logSipError("peer connection createOffer failed", { sessionId, event: e });
       emitter.emit("peerconnection:createofferfailed", e);
       finishSession();
     },
     "peerconnection:createanswerfailed": (e) => {
+      logSipError("peer connection createAnswer failed", { sessionId, event: e });
       emitter.emit("peerconnection:createanswerfailed", e);
       finishSession();
     },
     "peerconnection:setlocaldescriptionfailed": (e) => {
+      logSipError("peer connection setLocalDescription failed", { sessionId, event: e });
       emitter.emit("peerconnection:setlocaldescriptionfailed", e);
       finishSession();
     },
     "peerconnection:setremotedescriptionfailed": (e) => {
+      logSipError("peer connection setRemoteDescription failed", { sessionId, event: e });
       emitter.emit("peerconnection:setremotedescriptionfailed", e);
+      finishSession();
       setPeerConnectionError("peerconnection:setremotedescriptionfailed", e);
     },
     peerconnection: (e: PeerConnectionEvent) => {
@@ -317,6 +335,13 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
           clearIceDisconnectedTimer();
           clearIceRestartRetryTimer();
           clearIceRecoveryTimer();
+          if (iceRecoveryAttempt != null && iceState !== "closed") {
+            emitter.emit("sessionIceRecoverySucceeded", {
+              sessionId,
+              attempt: iceRecoveryAttempt,
+            });
+            iceRecoveryAttempt = null;
+          }
           return;
         }
         if (
@@ -338,6 +363,7 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
         }
         if (!iceFailedEmitted && iceState === "failed") {
           iceFailedEmitted = true;
+          logSipError("session ICE failed", { sessionId });
           emitter.emit("sessionIceFailed", { sessionId });
         }
       };

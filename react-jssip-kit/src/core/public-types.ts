@@ -13,6 +13,7 @@ export type {
   ExtraHeaders,
   MicDropPayload,
   SessionIceFailedPayload,
+  SessionFailedPayload,
   SessionIceRecoveryExhaustedPayload,
   ReferOptions,
   RenegotiateOptions,

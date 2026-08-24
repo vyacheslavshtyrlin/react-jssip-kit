@@ -35,11 +35,18 @@ export type SessionEventPayload<K extends SessionEventName> = _ListenerPayload<
   RTCSessionEventMap[K]
 >;
 
+/** The global `failed` event is always associated with this session id. */
+export type SessionFailedPayload = SessionEventPayload<"failed"> & {
+  sessionId: string;
+};
+
 export type JsSIPEventPayload<K extends JsSIPEventName> = K extends UAEventName
   ? UAEventPayload<K>
-  : K extends SessionEventName
-    ? SessionEventPayload<K>
-    : never;
+  : K extends "failed"
+    ? SessionFailedPayload
+    : K extends SessionEventName
+      ? SessionEventPayload<K>
+      : never;
 
 export type JsSIPEventHandler<K extends JsSIPEventName> = (
   payload?: JsSIPEventPayload<K>
@@ -78,12 +85,31 @@ export type SessionIceRecoveryExhaustedPayload = {
   source: "failed" | "disconnected";
 };
 
+export type SessionIceRecoveryStartedPayload = {
+  sessionId: string;
+  source: "failed" | "disconnected";
+  attempt: number;
+};
+
+export type SessionIceRecoverySucceededPayload = {
+  sessionId: string;
+  attempt: number;
+};
+
+export type AudioPlaybackBlockedPayload = {
+  sessionId: string;
+  error: unknown;
+};
+
 export type JsSIPEventMap = {
   [K in JsSIPEventName]: JsSIPEventPayload<K>;
 } & {
   micDrop: MicDropPayload;
   sessionIceFailed: SessionIceFailedPayload;
   sessionIceRecoveryExhausted: SessionIceRecoveryExhaustedPayload;
+  sessionIceRecoveryStarted: SessionIceRecoveryStartedPayload;
+  sessionIceRecoverySucceeded: SessionIceRecoverySucceededPayload;
+  audioPlaybackBlocked: AudioPlaybackBlockedPayload;
 };
 
 export type SipCallOptions = CallOptions;

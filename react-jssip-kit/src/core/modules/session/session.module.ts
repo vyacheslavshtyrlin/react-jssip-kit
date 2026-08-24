@@ -1,4 +1,5 @@
-﻿import type { StateAdapter } from "../../contracts/state";
+import { detachSessionListener } from "../../sip/session-listeners";
+import type { StateAdapter } from "../../contracts/state";
 import { CallStatus } from "../../contracts/state";
 import type { JssipEventEmitter } from "../event/event-target.emitter";
 import type {
@@ -246,7 +247,7 @@ export class SessionModule {
         const h = handlers[ev];
         if (!h) return;
         try {
-          session.off(ev, h);
+          detachSessionListener(session, ev, h);
         } catch (error) {
           console.error(
             "[react-jssip-kit] session handler detach failed",
