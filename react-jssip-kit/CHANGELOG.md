@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.2
+
+- Fixed: updated repository, issues, and homepage links after the GitHub repository was renamed to `react-jssip-kit`.
+
 ## 1.2.1
 
 - Fixed: an incoming INVITE is rejected with `486 Busy Here` before it can put an existing live session on hold when `maxSessionCount` is reached. Only attached `RTCSession` instances count toward the limit; pending media does not. Outgoing call initiation remains consumer-controlled.

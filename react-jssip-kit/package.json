@@ -1,6 +1,6 @@
 {
   "name": "react-jssip-kit",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": false,
   "description": "React hooks, provider, and typed SIP/WebRTC call state for JsSIP",
   "type": "module",
@@ -48,12 +48,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vyacheslavshtyrlin/react-jssip.git"
+    "url": "git+https://github.com/vyacheslavshtyrlin/react-jssip-kit.git"
   },
   "bugs": {
-    "url": "https://github.com/vyacheslavshtyrlin/react-jssip/issues"
+    "url": "https://github.com/vyacheslavshtyrlin/react-jssip-kit/issues"
   },
-  "homepage": "https://github.com/vyacheslavshtyrlin/react-jssip#readme",
+  "homepage": "https://github.com/vyacheslavshtyrlin/react-jssip-kit#readme",
   "author": "SIP Team",
   "peerDependencies": {
     "jssip": "^3.0.0",
