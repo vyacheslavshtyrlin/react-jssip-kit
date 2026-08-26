@@ -103,6 +103,38 @@ describe("createSessionHandlers terminal session events", () => {
     expect(cleanupSession).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the session after a duplicate remote answer in stable state", () => {
+    const cleanupSession = vi.fn();
+    const emitter = { emit: vi.fn() };
+    const setState = vi.fn();
+    const handlers = createSessionHandlers({
+      emitter: emitter as never,
+      state: { getState: () => ({ sessionsById: {} }), setState } as never,
+      cleanupSession,
+      autoIceRestart: false,
+      autoIceRestartMaxAttempts: 0,
+      autoIceRestartDisconnectedDelayMs: 0,
+      autoIceRestartRetryDelayMs: 0,
+      restartIce: () => false,
+      sessionId: "session-1",
+    });
+    const error = new Error(
+      "Failed to execute 'setRemoteDescription' on 'RTCPeerConnection': " +
+        "Failed to set remote answer sdp: Called in wrong state: stable"
+    );
+
+    handlers["peerconnection:setremotedescriptionfailed"]?.(error);
+
+    expect(cleanupSession).not.toHaveBeenCalled();
+    expect(emitter.emit).toHaveBeenCalledWith(
+      "peerconnection:setremotedescriptionfailed",
+      error
+    );
+    expect(setState).toHaveBeenCalledWith({
+      error: `peerconnection:setremotedescriptionfailed: ${error.message}`,
+    });
+  });
+
   it("includes the session id in the global failed payload", () => {
     const emitter = { emit: vi.fn() };
     const handlers = createSessionHandlers({

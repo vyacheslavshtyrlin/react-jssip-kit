@@ -167,13 +167,18 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
     cleanupIceFailedListener();
     cleanupSession();
   };
+  const getPeerConnectionErrorMessage = (error: unknown) =>
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "Peer connection error";
+  const isDuplicateRemoteAnswerError = (error: unknown) =>
+    /Failed to set remote answer sdp:\s*Called in wrong state:\s*stable/i.test(
+      getPeerConnectionErrorMessage(error)
+    );
   const setPeerConnectionError = (eventName: string, error: unknown) => {
-    const message =
-      error instanceof Error
-        ? error.message
-        : typeof error === "string"
-          ? error
-          : "Peer connection error";
+    const message = getPeerConnectionErrorMessage(error);
     state.setState({ error: `${eventName}: ${message}` });
   };
   if (typeof iceCandidateReadyDelayMs === "number") {
@@ -313,8 +318,12 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
     "peerconnection:setremotedescriptionfailed": (e) => {
       logSipError("peer connection setRemoteDescription failed", { sessionId, event: e });
       emitter.emit("peerconnection:setremotedescriptionfailed", e);
-      finishSession();
       setPeerConnectionError("peerconnection:setremotedescriptionfailed", e);
+      // JsSIP may receive the same provisional SDP answer more than once.
+      // The first answer already moved the PeerConnection to `stable`, so a
+      // repeated answer is rejected by WebRTC even though the SIP session can
+      // continue and accept the final response.
+      if (!isDuplicateRemoteAnswerError(e)) finishSession();
     },
     peerconnection: (e: PeerConnectionEvent) => {
       emitter.emit("peerconnection", e);

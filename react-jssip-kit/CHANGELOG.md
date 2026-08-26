@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.4
+
+- Fixed: duplicate provisional SDP answers (for example, repeated identical `183 Session Progress` responses) no longer remove an otherwise active session when JsSIP reports `setRemoteDescription` with `Called in wrong state: stable`. The diagnostic event and `sipState.error` are preserved, while other remote-description failures remain terminal.
+
 ## 1.2.3
 
 - Fixed: documentation, changelog, and license links in the npm README now use the correct GitHub monorepo paths.
