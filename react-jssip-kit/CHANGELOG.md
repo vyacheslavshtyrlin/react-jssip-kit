@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.5
+
+- Fixed: `CallPlayer` no longer detaches and reattaches the remote stream when the `onPlaybackBlocked` callback identity changes.
+- Fixed: playback recovery requests that arrive while `audio.play()` is pending are queued instead of being lost. Rapid `unmute`, connection, `canplay`, `pause`, and `stalled` signals are coalesced and rate-limited, and pending retries are cancelled during cleanup.
+- Fixed: synchronous and asynchronous `audio.play()` failures are handled without leaving an unhandled rejection, while the latest `onPlaybackBlocked` callback is notified.
+- Added: regression tests for pending playback recovery, retry throttling, rejected playback, and cleanup.
+
 ## 1.2.4
 
 - Fixed: duplicate provisional SDP answers (for example, repeated identical `183 Session Progress` responses) no longer remove an otherwise active session when JsSIP reports `setRemoteDescription` with `Called in wrong state: stable`. The diagnostic event and `sipState.error` are preserved, while other remote-description failures remain terminal.
