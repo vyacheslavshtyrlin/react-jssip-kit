@@ -295,9 +295,9 @@ export class SessionModule {
       autoIceRestartMaxAttempts: this.deps.getAutoIceRestartMaxAttempts(),
       autoIceRestartDisconnectedDelayMs:
         this.deps.getAutoIceRestartDisconnectedDelayMs(),
-      autoIceRestartRetryDelayMs:
-        this.deps.getAutoIceRestartRetryDelayMs(),
-      restartIce: () => session.renegotiate({ iceRestart: true }),
+      autoIceRestartRetryDelayMs: this.deps.getAutoIceRestartRetryDelayMs(),
+      restartIce: () =>
+        session.renegotiate({ rtcOfferConstraints: { iceRestart: true } }),
       sessionId,
     });
   }

@@ -7,7 +7,10 @@
     "dev:demo": "npm run dev --workspace=demo",
     "build:demo": "npm run build --workspace=demo",
     "build": "npm run build:react-jssip-kit && npm run build:demo",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run test --workspace=react-jssip-kit",
+    "test:coverage": "npm run test:coverage --workspace=react-jssip-kit",
+    "release:check": "npm run lint --workspace=react-jssip-kit && npm run typecheck --workspace=react-jssip-kit && npm run test:coverage --workspace=react-jssip-kit && npm run build --workspace=react-jssip-kit && npm pack --dry-run --workspace=react-jssip-kit",
+    "prepare": "husky"
   },
   "keywords": [],
   "author": "",
@@ -17,5 +20,16 @@
   "workspaces": [
     "react-jssip-kit",
     "demo"
-  ]
+  ],
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0"
+  },
+  "lint-staged": {
+    "react-jssip-kit/src/**/*.{ts,tsx}": [
+      "prettier --write",
+      "npm exec --workspace=react-jssip-kit eslint -- --fix"
+    ],
+    "react-jssip-kit/*.{ts,json,md}": "prettier --write"
+  }
 }
