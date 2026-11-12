@@ -77,8 +77,10 @@ export class SessionManager {
       entry.session = session;
       entry.rtc.setSession(session);
     } else {
+      const rtc = new WebRTCSessionController();
+      rtc.setSession(session);
       this.entries.set(sessionId, {
-        rtc: new WebRTCSessionController(),
+        rtc,
         session,
         media: null,
         ownsMediaTracks: false,
