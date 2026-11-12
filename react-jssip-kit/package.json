@@ -24,7 +24,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "format": "prettier --write \"{src,docs}/**/*.{ts,tsx,md,json}\"",
     "format:check": "prettier --check \"{src,docs}/**/*.{ts,tsx,md,json}\"",

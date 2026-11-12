@@ -9,6 +9,12 @@ export type SipMessage = {
   direction: "in" | "out";
 };
 
+type MessageView = {
+  from?: { uri?: { user?: string } };
+  to?: { uri?: { user?: string } };
+  body?: string;
+};
+
 export function useSipMessages(filter?: { from?: string }): SipMessage[] {
   const { events } = useSipKernel();
   const [messages, setMessages] = useState<SipMessage[]>([]);
@@ -16,15 +22,13 @@ export function useSipMessages(filter?: { from?: string }): SipMessage[] {
   useEffect(() => {
     return events.onUA("newMessage", (e) => {
       if (!e) return;
-      const direction: "in" | "out" =
-        (e as any).originator === "remote" ? "in" : "out";
-      const request = (e as any).request;
-      const message = (e as any).message;
+      const direction: "in" | "out" = e.originator === "remote" ? "in" : "out";
+      const { request, message } = e;
+      const messageView = message as unknown as MessageView;
       const from =
-        request?.from?.uri?.user ?? message?.from?.uri?.user ?? "";
-      const to =
-        request?.to?.uri?.user ?? message?.to?.uri?.user ?? "";
-      const body = request?.body ?? message?.body ?? "";
+        request?.from?.uri?.user ?? messageView.from?.uri?.user ?? "";
+      const to = request?.to?.uri?.user ?? messageView.to?.uri?.user ?? "";
+      const body = request?.body ?? messageView.body ?? "";
 
       setMessages((prev) => [
         ...prev,

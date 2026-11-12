@@ -1,8 +1,22 @@
 import { detachSessionListener } from "../../sip/session-listeners";
+import type { RTCSession } from "../../sip/types";
+
 type PcSnapshot = {
   connectionState?: RTCPeerConnectionState;
   signalingState?: RTCSignalingState;
   iceConnectionState?: RTCIceConnectionState;
+};
+
+type AudioRtpStats = RTCStats & {
+  kind?: string;
+  mediaType?: string;
+  packetsSent?: number;
+  bytesSent?: number;
+  packetsReceived?: number;
+  packetsLost?: number;
+  bytesReceived?: number;
+  jitter?: number;
+  roundTripTime?: number;
 };
 
 const describePc = (pc?: RTCPeerConnection | null): PcSnapshot => ({
@@ -81,7 +95,7 @@ export class SipDebugLogger {
     console.info("[sip] ice restart", { sessionId, ...payload });
   }
 
-  startCallStatsLogging(sessionId: string, session: any) {
+  startCallStatsLogging(sessionId: string, session: RTCSession) {
     if (!this.enabled || this.statsStops.has(sessionId)) return;
 
     let pc: RTCPeerConnection | null =
@@ -184,24 +198,25 @@ function collectAudioStats(report: RTCStatsReport) {
   const inboundAudio: Array<Record<string, unknown>> = [];
 
   report.forEach((stat) => {
-    const kind = (stat as any).kind ?? (stat as any).mediaType;
+    const audioStat = stat as AudioRtpStats;
+    const kind = audioStat.kind ?? audioStat.mediaType;
     if (stat.type === "outbound-rtp" && kind === "audio") {
       outboundAudio.push({
         id: stat.id,
-        packetsSent: (stat as any).packetsSent,
-        bytesSent: (stat as any).bytesSent,
-        jitter: (stat as any).jitter,
-        roundTripTime: (stat as any).roundTripTime,
+        packetsSent: audioStat.packetsSent,
+        bytesSent: audioStat.bytesSent,
+        jitter: audioStat.jitter,
+        roundTripTime: audioStat.roundTripTime,
       });
     }
     if (stat.type === "inbound-rtp" && kind === "audio") {
       inboundAudio.push({
         id: stat.id,
-        packetsReceived: (stat as any).packetsReceived,
-        packetsLost: (stat as any).packetsLost,
-        bytesReceived: (stat as any).bytesReceived,
-        jitter: (stat as any).jitter,
-        roundTripTime: (stat as any).roundTripTime,
+        packetsReceived: audioStat.packetsReceived,
+        packetsLost: audioStat.packetsLost,
+        bytesReceived: audioStat.bytesReceived,
+        jitter: audioStat.jitter,
+        roundTripTime: audioStat.roundTripTime,
       });
     }
   });

@@ -8,6 +8,14 @@ import {
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
+type DebugWindow = Window &
+  typeof globalThis & {
+    sipDebugBridge?: (debug?: boolean | string) => void;
+    sipState?: () => unknown;
+    sipSessions?: () => unknown;
+    sipSupport?: unknown;
+  };
+
 export interface SipDebugToggleResult {
   debug: boolean;
   text: string;
@@ -65,7 +73,7 @@ export class SipDebugger {
         serializeDebugSetting(effectivePattern)
       );
       try {
-        (window as any).sipDebugBridge?.(effectivePattern);
+        (window as DebugWindow).sipDebugBridge?.(effectivePattern);
       } catch {
         /* ignore */
       }
@@ -84,7 +92,7 @@ export class SipDebugger {
       }
       storage?.setItem?.(this.storageKey, serializeDebugSetting(false));
       try {
-        (window as any).sipDebugBridge?.(false);
+        (window as DebugWindow).sipDebugBridge?.(false);
       } catch {
         /* ignore */
       }
@@ -110,6 +118,7 @@ export class SipDebugger {
   }
 
   attachToWindow(win: Window & typeof globalThis = window): void {
+    const debugWindow = win as DebugWindow;
     const api = {
       enableDebug: (): SipDebugToggleResult => {
         this.enable();
@@ -129,7 +138,7 @@ export class SipDebugger {
       }),
       sipState: () => {
         try {
-          const getter = (win as any).sipState;
+          const getter = debugWindow.sipState;
           return typeof getter === "function"
             ? getter()
             : "sipState helper not available; ensure client debug is enabled";
@@ -139,7 +148,7 @@ export class SipDebugger {
       },
       sipSessions: () => {
         try {
-          const getter = (win as any).sipSessions;
+          const getter = debugWindow.sipSessions;
           return typeof getter === "function"
             ? getter()
             : "sipSessions helper not available; ensure client debug is enabled";
@@ -150,7 +159,7 @@ export class SipDebugger {
     };
 
     try {
-      (win as any).sipSupport = api;
+      debugWindow.sipSupport = api;
     } catch {
       /* ignore */
     }

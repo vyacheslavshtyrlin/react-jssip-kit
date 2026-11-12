@@ -56,7 +56,8 @@ export function createUAHandlers(deps: Deps): Partial<UAEventMap> {
     newRTCSession: deps.onNewRTCSession,
     newMessage: (e: IncomingMessageEvent | OutgoingMessageEvent) =>
       emitter.emit("newMessage", e),
-    sipEvent: (e: any) => emitter.emit("sipEvent", e),
+    sipEvent: (e: Parameters<UAEventMap["sipEvent"]>[0]) =>
+      emitter.emit("sipEvent", e),
     newOptions: (e: IncomingOptionsEvent | OutgoingOptionsEvent) =>
       emitter.emit("newOptions", e),
   };

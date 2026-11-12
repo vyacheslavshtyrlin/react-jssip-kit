@@ -19,7 +19,9 @@ export class WebRTCSessionController {
   }
 
   private getPC(): RTCPeerConnection | null {
-    return (this.currentSession as any)?.connection ?? null;
+    return (
+      (this.currentSession?.connection as unknown as RTCPeerConnection) ?? null
+    );
   }
 
   public cleanup(stopTracks: boolean = false): void {
@@ -59,7 +61,7 @@ export class WebRTCSessionController {
     if (!this.currentSession) return false;
     try {
       this.currentSession.terminate(
-        options ?? ({ status_code: 486, reason_phrase: "Busy Here" } as any)
+        options ?? { status_code: 486, reason_phrase: "Busy Here" }
       );
     } catch {
       // Session may already be terminated at the JsSIP level; ignore.
@@ -101,7 +103,7 @@ export class WebRTCSessionController {
 
   public transfer(target: string, options?: ReferOptions): boolean {
     return this.currentSession
-      ? (this.currentSession.refer(target as any, options), true)
+      ? (this.currentSession.refer(target, options), true)
       : false;
   }
 

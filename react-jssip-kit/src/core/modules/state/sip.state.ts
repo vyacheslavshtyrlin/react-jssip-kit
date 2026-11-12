@@ -1,4 +1,4 @@
-import type { InternalSipState} from "../../contracts/state";
+import type { InternalSipState } from "../../contracts/state";
 import { SipStatus } from "../../contracts/state";
 
 export function getInitialSipState(): InternalSipState {
@@ -11,14 +11,23 @@ export function getInitialSipState(): InternalSipState {
   };
 }
 
-export function shallowEqual(objA: any, objB: any): boolean {
+export function shallowEqual(objA: unknown, objB: unknown): boolean {
   if (objA === objB) return true;
-  if (!objA || !objB) return false;
+  if (
+    typeof objA !== "object" ||
+    objA === null ||
+    typeof objB !== "object" ||
+    objB === null
+  ) {
+    return false;
+  }
+  const recordA = objA as Record<string, unknown>;
+  const recordB = objB as Record<string, unknown>;
   const keysA = Object.keys(objA);
   const keysB = Object.keys(objB);
   if (keysA.length !== keysB.length) return false;
   for (const key of keysA) {
-    if (objA[key] !== objB[key]) return false;
+    if (recordA[key] !== recordB[key]) return false;
   }
   return true;
 }
