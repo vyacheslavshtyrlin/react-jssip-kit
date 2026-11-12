@@ -31,6 +31,7 @@ Run commands from the repository root.
 | `npm run dev:demo`              | Start the demo app in Vite dev mode. |
 | `npm run build:demo`            | Build the demo app.                  |
 | `npm run build`                 | Build the package and demo app.      |
+| `npm run release:check`         | Validate the library before publish. |
 
 ## Publishing Checklist
 
