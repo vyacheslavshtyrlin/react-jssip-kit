@@ -9,7 +9,8 @@
     "build": "npm run build:react-jssip-kit && npm run build:demo",
     "test": "npm run test --workspace=react-jssip-kit",
     "test:coverage": "npm run test:coverage --workspace=react-jssip-kit",
-    "release:check": "npm run lint --workspace=react-jssip-kit && npm run typecheck --workspace=react-jssip-kit && npm run test:coverage --workspace=react-jssip-kit && npm run build --workspace=react-jssip-kit && npm pack --dry-run --workspace=react-jssip-kit",
+    "package:smoke": "node scripts/package-smoke.mjs",
+    "release:check": "npm run lint --workspace=react-jssip-kit && npm run typecheck --workspace=react-jssip-kit && npm run test:coverage --workspace=react-jssip-kit && npm run build --workspace=react-jssip-kit && npm run package:smoke",
     "prepare": "husky"
   },
   "keywords": [],
