@@ -14,6 +14,12 @@ type StartOpts = {
   onStartError?: (ua: UA) => void;
 };
 
+type JssipDebug = typeof JsSIP.debug & {
+  setLogger?: (logger: Console) => void;
+  logger?: Console;
+  disable?: () => void;
+};
+
 export class SipUserAgent {
   private _ua: UA | null = null;
 
@@ -139,11 +145,11 @@ export class SipUserAgent {
 
     if (enabled) {
       JsSIP.debug.enable(pattern);
-      const dbg: any = (JsSIP as any).debug;
+      const dbg = JsSIP.debug as JssipDebug;
       if (dbg?.setLogger) dbg.setLogger(console);
       else if (dbg) dbg.logger = console;
     } else {
-      (JsSIP.debug as any)?.disable?.();
+      (JsSIP.debug as JssipDebug).disable?.();
     }
   }
 

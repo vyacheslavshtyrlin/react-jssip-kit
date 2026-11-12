@@ -13,6 +13,13 @@ type DebugRuntimeDeps = {
   setDebugEnabled: (enabled: boolean) => void;
 };
 
+type DebugWindow = Window &
+  typeof globalThis & {
+    sipDebugBridge?: (debug?: boolean | string) => void;
+    sipState?: () => unknown;
+    sipSessions?: () => unknown;
+  };
+
 export class SipDebugRuntime {
   private readonly deps: DebugRuntimeDeps;
   private stateLogOff?: () => void;
@@ -23,7 +30,7 @@ export class SipDebugRuntime {
 
   attachBridge(setDebug: (debug?: boolean | string) => void): void {
     if (typeof window === "undefined") return;
-    (window as any).sipDebugBridge = (debug?: boolean | string) =>
+    (window as DebugWindow).sipDebugBridge = (debug?: boolean | string) =>
       setDebug(debug ?? true);
   }
 
@@ -61,7 +68,7 @@ export class SipDebugRuntime {
     this.deps.setDebugEnabled(enabled);
     this.toggleStateLogger(enabled);
 
-    const win = window as any;
+    const win = window as DebugWindow;
     const disabledInspector = () => {
       console.warn("SIP debug inspector disabled; enable debug to inspect.");
       return null;

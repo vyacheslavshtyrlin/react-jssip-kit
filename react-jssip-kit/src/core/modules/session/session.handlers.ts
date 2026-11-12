@@ -91,7 +91,12 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
   const emitIceRecoveryExhausted = (source: "failed" | "disconnected") => {
     if (iceRecoveryExhaustedEmitted) return;
     iceRecoveryExhaustedEmitted = true;
-    logSipError("session ICE recovery exhausted", { sessionId, source, attempts: iceRestartAttempts, maxAttempts: autoIceRestartMaxAttempts });
+    logSipError("session ICE recovery exhausted", {
+      sessionId,
+      source,
+      attempts: iceRestartAttempts,
+      maxAttempts: autoIceRestartMaxAttempts,
+    });
     emitter.emit("sessionIceRecoveryExhausted", {
       sessionId,
       attempts: iceRestartAttempts,
@@ -188,7 +193,11 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
   return {
     progress: (e: IncomingEvent | OutgoingEvent) => {
       emitter.emit("progress", e);
-      if ((e as any).originator === "remote" && (e as any).response?.body) {
+      if (
+        e.originator === "remote" &&
+        "response" in e &&
+        Boolean(e.response?.body)
+      ) {
         upsertSessionState(state, sessionId, {
           status: CallStatus.EarlyMedia,
         });
@@ -301,22 +310,34 @@ export function createSessionHandlers(deps: Deps): Partial<RTCSessionEventMap> {
       finishSession();
     },
     "peerconnection:createofferfailed": (e) => {
-      logSipError("peer connection createOffer failed", { sessionId, event: e });
+      logSipError("peer connection createOffer failed", {
+        sessionId,
+        event: e,
+      });
       emitter.emit("peerconnection:createofferfailed", e);
       finishSession();
     },
     "peerconnection:createanswerfailed": (e) => {
-      logSipError("peer connection createAnswer failed", { sessionId, event: e });
+      logSipError("peer connection createAnswer failed", {
+        sessionId,
+        event: e,
+      });
       emitter.emit("peerconnection:createanswerfailed", e);
       finishSession();
     },
     "peerconnection:setlocaldescriptionfailed": (e) => {
-      logSipError("peer connection setLocalDescription failed", { sessionId, event: e });
+      logSipError("peer connection setLocalDescription failed", {
+        sessionId,
+        event: e,
+      });
       emitter.emit("peerconnection:setlocaldescriptionfailed", e);
       finishSession();
     },
     "peerconnection:setremotedescriptionfailed": (e) => {
-      logSipError("peer connection setRemoteDescription failed", { sessionId, event: e });
+      logSipError("peer connection setRemoteDescription failed", {
+        sessionId,
+        event: e,
+      });
       emitter.emit("peerconnection:setremotedescriptionfailed", e);
       setPeerConnectionError("peerconnection:setremotedescriptionfailed", e);
       // JsSIP may receive the same provisional SDP answer more than once.

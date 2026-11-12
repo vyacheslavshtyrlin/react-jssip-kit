@@ -1,4 +1,5 @@
-import type { RTCSession } from "../../sip/types";
+import type { RTCSession, RTCSessionEventMap } from "../../sip/types";
+import { detachSessionListener } from "../../sip/session-listeners";
 import type { WebRTCSessionController } from "./webrtc-session.controller";
 import { sipDebugLogger } from "../debug/sip-debug.logger";
 
@@ -96,7 +97,7 @@ export class MicRecoveryManager {
 
       const stream = rtc.mediaStream;
       const track = stream?.getAudioTracks?.()[0];
-      const pc: RTCPeerConnection | undefined = (session as any)?.connection;
+      const pc = session.connection as unknown as RTCPeerConnection;
       const sender = pc
         ?.getSenders?.()
         ?.find((s: RTCRtpSender) => s.track?.kind === "audio");
@@ -161,7 +162,9 @@ export class MicRecoveryManager {
     }, intervalMs);
 
     const session = this.deps.getSession(sessionId);
-    let trackedPc: RTCPeerConnection | undefined = (session as any)?.connection;
+    let trackedPc: RTCPeerConnection | undefined = session?.connection as
+      | RTCPeerConnection
+      | undefined;
 
     const onIceChange = () => {
       const state = trackedPc?.iceConnectionState;
@@ -175,11 +178,11 @@ export class MicRecoveryManager {
       newPc?.addEventListener?.("iceconnectionstatechange", onIceChange);
     };
 
-    const onPeerConnection = (data: { peerconnection: RTCPeerConnection }) => {
-      attachIceListener(data.peerconnection);
+    const onPeerConnection: RTCSessionEventMap["peerconnection"] = (data) => {
+      attachIceListener(data.peerconnection as unknown as RTCPeerConnection);
     };
 
-    (session as any)?.on?.("peerconnection", onPeerConnection);
+    session?.on("peerconnection", onPeerConnection);
     trackedPc?.addEventListener?.("iceconnectionstatechange", onIceChange);
 
     // Immediate dead-track check — bypasses warmup.
@@ -202,7 +205,9 @@ export class MicRecoveryManager {
       clearInterval(timer);
       trackedPc?.removeEventListener?.("iceconnectionstatechange", onIceChange);
       try {
-        (session as any)?.off?.("peerconnection", onPeerConnection);
+        if (session) {
+          detachSessionListener(session, "peerconnection", onPeerConnection);
+        }
       } catch (error) {
         console.error(
           "[react-jssip-kit] microphone recovery cleanup failed",

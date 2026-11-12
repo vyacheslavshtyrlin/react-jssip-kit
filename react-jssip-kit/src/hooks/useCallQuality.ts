@@ -12,6 +12,16 @@ export type CallQuality = {
 
 const POLL_INTERVAL_MS = 3000;
 
+type QualityStats = RTCStats & {
+  kind?: string;
+  mediaType?: string;
+  jitter?: number;
+  packetsReceived?: number;
+  packetsLost?: number;
+  state?: string;
+  currentRoundTripTime?: number;
+};
+
 function computeLevel(
   rtt: number,
   packetLoss: number,
@@ -35,17 +45,18 @@ async function readStats(
   let hasInbound = false;
 
   report.forEach((stat) => {
-    const kind = (stat as any).kind ?? (stat as any).mediaType;
+    const qualityStat = stat as QualityStats;
+    const kind = qualityStat.kind ?? qualityStat.mediaType;
 
     if (stat.type === "inbound-rtp" && kind === "audio") {
       hasInbound = true;
-      jitter = ((stat as any).jitter ?? 0) * 1000;
-      packetsReceived = (stat as any).packetsReceived ?? 0;
-      packetsLost = (stat as any).packetsLost ?? 0;
+      jitter = (qualityStat.jitter ?? 0) * 1000;
+      packetsReceived = qualityStat.packetsReceived ?? 0;
+      packetsLost = qualityStat.packetsLost ?? 0;
     }
 
-    if (stat.type === "candidate-pair" && (stat as any).state === "succeeded") {
-      const raw = (stat as any).currentRoundTripTime;
+    if (stat.type === "candidate-pair" && qualityStat.state === "succeeded") {
+      const raw = qualityStat.currentRoundTripTime;
       if (typeof raw === "number") rtt = raw * 1000;
     }
   });
