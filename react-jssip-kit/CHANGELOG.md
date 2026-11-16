@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.8
+
+- Fixed: npm package metadata now identifies `react-jssip-kit` as the package directory within the monorepo and links directly to its GitHub README.
+
 ## 1.2.5
 
 - Fixed: `CallPlayer` no longer detaches and reattaches the remote stream when the `onPlaybackBlocked` callback identity changes.
